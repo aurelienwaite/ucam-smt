@@ -68,6 +68,7 @@ public class FeatureCreator {
 				new Source2TargetLexicalProbability());
 		features.put("target2source_lexical_probability",
 				new Target2SourceLexicalProbability());
+		features.put("number_target_elements", new NumberTargetElements());
 		String provenance = conf.get("provenance");
 		if (provenance != null) {
 			String[] provenances = provenance.split(",");
