@@ -220,6 +220,8 @@ class MarginalReducer extends
 	}
 
 	public static final String SOURCE_TO_TARGET = "rulextract.source2target";
+	
+	public static final String FEATURE_NAME = "rulextract.featurename";
 
 	private static final String S2T_FEATURE_NAME = "source2target_probability";
 
@@ -232,6 +234,8 @@ class MarginalReducer extends
 	private Text marginal = new Text();
 
 	private boolean source2Target = true;
+	
+	private String featureName = null;
 
 	private int[] mappings;
 
@@ -246,7 +250,9 @@ class MarginalReducer extends
 	}
 
 	private String getFeatureName() {
-		if (source2Target) {
+		if (featureName != null) {
+			return featureName;
+		} else if (source2Target) {
 			return S2T_FEATURE_NAME;
 		} else {
 			return T2S_FEATURE_NAME;
@@ -263,6 +269,7 @@ class MarginalReducer extends
 					+ SOURCE_TO_TARGET);
 		}
 		source2Target = Boolean.valueOf(s2tString);
+		featureName = context.getConfiguration().get(FEATURE_NAME);
 		mappings = ProvenanceCountMap.getFeatureIndex(getFeatureName(),
 				context.getConfiguration());
 	}

@@ -69,6 +69,7 @@ public class FeatureCreator {
 				new Source2TargetLexicalProbability());
 		features.put("target2source_lexical_probability",
 				new Target2SourceLexicalProbability());
+		features.put("source2target_addonesmoothed_probability", new Source2TargetAddOneSmoothedProbability());
 		String provenance = conf.get("provenance");
 		if (provenance != null) {
 			String[] provenances = provenance.split(",");
@@ -83,6 +84,8 @@ public class FeatureCreator {
 				features.put("provenance_target2source_lexical_probability-"
 						+ prov, new ProvenanceTarget2SourceLexicalProbability(
 						prov));
+				features.put("provenance_source2target_addonesmoothed_probability-" + prov,
+						new ProvenanceSource2TargetAddOneSmoothedProbability(prov));
 			}
 		}
 		String selectedFeaturesString = conf.get("features");
@@ -104,7 +107,9 @@ public class FeatureCreator {
 					|| selectedFeature
 							.equals("provenance_source2target_probability")
 					|| selectedFeature
-							.equals("provenance_target2source_probability")) {
+							.equals("provenance_target2source_probability")
+					|| selectedFeature
+							.equals("provenance_source2target_addonesmoothed_probability")) {
 				for (String prov : conf.get("provenance").split(",")) {
 					featureIndex = nextFeatureIndex;
 					nextFeatureIndex += features.get(
@@ -197,7 +202,9 @@ public class FeatureCreator {
 					|| featureName
 							.equals("provenance_source2target_probability")
 					|| featureName
-							.equals("provenance_target2source_probability")) {
+							.equals("provenance_target2source_probability")
+					|| featureName
+							.equals("provenance_source2target_addonesmoothed_probability")) {
 				for (String provenance : conf.get("provenance").split(",")) {
 					Map<Integer, Double> features = createFeatures(featureName
 							+ "-" + provenance, rule, map, ruleType);
