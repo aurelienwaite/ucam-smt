@@ -21,6 +21,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ByteWritable;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.IntWritable;
@@ -34,6 +35,9 @@ import uk.ac.cam.eng.extraction.datatypes.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceCountMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
+import uk.ac.cam.eng.rule.features.Feature;
+import uk.ac.cam.eng.rule.features.FeatureRegistry;
+import uk.ac.cam.eng.util.CLI;
 
 /**
  * Computes marginal counts. Used for phrase based probability computation.
@@ -56,17 +60,11 @@ class MarginalReducer extends
 	 */
 	private static class RuleWritableSplit {
 		int lhsStart;
-
 		int lhsLength;
-
 		int sourceStart;
-
 		int sourceLength;
-
 		int targetStart;
-
 		int targetLength;
-
 	}
 
 	/**
@@ -74,7 +72,7 @@ class MarginalReducer extends
 	 * safe. This class represents all the state that can be placed in a
 	 * ThreadLocal
 	 * 
-	 * @author aaw35
+	 * @author Aurelien Waite
 	 * 
 	 */
 	private static class MRComparatorState {
@@ -90,9 +88,9 @@ class MarginalReducer extends
 
 	/**
 	 * Note that this comparator is extremely sensitive to the rule writable
-	 * binary format Change with care!
+	 * binary format. Change with care!
 	 * 
-	 * @author aaw35
+	 * @author Aurelien Waite
 	 * 
 	 */
 	public static abstract class MRComparator extends WritableComparator {
@@ -221,10 +219,6 @@ class MarginalReducer extends
 
 	public static final String SOURCE_TO_TARGET = "rulextract.source2target";
 
-	private static final String S2T_FEATURE_NAME = "source2target_probability";
-
-	private static final String T2S_FEATURE_NAME = "target2source_probability";
-
 	private ProvenanceCountMap totals = new ProvenanceCountMap();
 
 	private List<RuleCount> ruleCounts = new ArrayList<>();
@@ -237,6 +231,8 @@ class MarginalReducer extends
 
 	private FeatureMap features = new FeatureMap();
 
+	private FeatureRegistry fReg;
+
 	private Text getMarginal(RuleWritable rule) {
 		if (source2Target) {
 			return rule.getSource();
@@ -245,26 +241,28 @@ class MarginalReducer extends
 		}
 	}
 
-	private String getFeatureName() {
-		if (source2Target) {
-			return S2T_FEATURE_NAME;
-		} else {
-			return T2S_FEATURE_NAME;
-		}
-	}
-
 	@Override
 	protected void setup(Context context) throws IOException,
 			InterruptedException {
 		super.setup(context);
+		Configuration conf = context.getConfiguration();
 		String s2tString = context.getConfiguration().get(SOURCE_TO_TARGET);
 		if (s2tString == null) {
 			throw new RuntimeException("Need to set configuration value "
 					+ SOURCE_TO_TARGET);
 		}
 		source2Target = Boolean.valueOf(s2tString);
-		mappings = ProvenanceCountMap.getFeatureIndex(getFeatureName(),
-				context.getConfiguration());
+		fReg = new FeatureRegistry(conf.get(CLI.Features.FEATURES),
+				conf.get(CLI.Provenance.PROV));
+		if (source2Target) {
+			mappings = fReg.getFeatureIndices(
+					Feature.SOURCE2TARGET_PROBABILITY,
+					Feature.PROVENANCE_SOURCE2TARGET_PROBABILITY);
+		} else {
+			mappings = fReg.getFeatureIndices(
+					Feature.TARGET2SOURCE_PROBABILITY,
+					Feature.PROVENANCE_TARGET2SOURCE_PROBABILITY);
+		}
 	}
 
 	private void marginalReduce(Iterable<RuleCount> rules,
@@ -276,9 +274,7 @@ class MarginalReducer extends
 				double probability = (double) entry.getValue().get()
 						/ (double) totals.get(entry.getKey()).get();
 				int featureIndex = mappings[(int) entry.getKey().get()];
-				features.put(featureIndex, probability);
-				++featureIndex;
-				features.put(featureIndex, entry.getValue().get());
+				features.put(featureIndex, Math.log(probability));			
 			}
 			RuleWritable outKey = rw.rule;
 			if (!source2Target) {

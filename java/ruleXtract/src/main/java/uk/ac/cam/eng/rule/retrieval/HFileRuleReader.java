@@ -29,7 +29,7 @@ import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.Text;
 
-import uk.ac.cam.eng.extraction.hadoop.datatypes.AlignmentAndFeatureMap;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
 import uk.ac.cam.eng.rulebuilding.features.EnumRuleType;
@@ -41,7 +41,7 @@ import uk.ac.cam.eng.util.Pair;
  * @date 28 May 2014
  */
 public class HFileRuleReader implements
-		Iterable<Pair<RuleWritable, AlignmentAndFeatureMap>> {
+		Iterable<Pair<RuleWritable, RuleData>> {
 
 	private HFileScanner scanner;
 
@@ -80,16 +80,16 @@ public class HFileRuleReader implements
 		}
 	}
 
-	public Iterable<Pair<RuleWritable, AlignmentAndFeatureMap>> getRulesForSource() {
+	public Iterable<Pair<RuleWritable, RuleData>> getRulesForSource() {
 		readValue();
-		final Iterator<Pair<Text, AlignmentAndFeatureMap>> instance = value
+		final Iterator<Pair<Text, RuleData>> instance = value
 				.iterator();
 
-		return new Iterable<Pair<RuleWritable, AlignmentAndFeatureMap>>() {
+		return new Iterable<Pair<RuleWritable, RuleData>>() {
 
 			@Override
-			public Iterator<Pair<RuleWritable, AlignmentAndFeatureMap>> iterator() {
-				return new Iterator<Pair<RuleWritable, AlignmentAndFeatureMap>>() {
+			public Iterator<Pair<RuleWritable, RuleData>> iterator() {
+				return new Iterator<Pair<RuleWritable, RuleData>>() {
 
 					@Override
 					public boolean hasNext() {
@@ -97,8 +97,8 @@ public class HFileRuleReader implements
 					}
 
 					@Override
-					public Pair<RuleWritable, AlignmentAndFeatureMap> next() {
-						Pair<Text, AlignmentAndFeatureMap> next = instance
+					public Pair<RuleWritable, RuleData> next() {
+						Pair<Text, RuleData> next = instance
 								.next();
 						rule.setTarget(next.getFirst());
 						return Pair.createPair(rule, next.getSecond());
@@ -127,7 +127,7 @@ public class HFileRuleReader implements
 	}
 
 	@Override
-	public Iterator<Pair<RuleWritable, AlignmentAndFeatureMap>> iterator() {
+	public Iterator<Pair<RuleWritable, RuleData>> iterator() {
 		boolean temp = false;
 		try {
 			temp = scanner.seekTo();
@@ -137,13 +137,13 @@ public class HFileRuleReader implements
 		final boolean isNotEmpty = temp;
 		if (!isNotEmpty) {
 			return Collections
-					.<Pair<RuleWritable, AlignmentAndFeatureMap>> emptyList()
+					.<Pair<RuleWritable, RuleData>> emptyList()
 					.iterator();
 		}
 		readSource();
-		return new Iterator<Pair<RuleWritable, AlignmentAndFeatureMap>>() {
+		return new Iterator<Pair<RuleWritable, RuleData>>() {
 
-			Iterator<Pair<RuleWritable, AlignmentAndFeatureMap>> targetIter;
+			Iterator<Pair<RuleWritable, RuleData>> targetIter;
 
 			boolean hasNext = isNotEmpty;
 
@@ -153,7 +153,7 @@ public class HFileRuleReader implements
 			}
 
 			@Override
-			public Pair<RuleWritable, AlignmentAndFeatureMap> next() {
+			public Pair<RuleWritable, RuleData> next() {
 				if (targetIter == null) {
 					targetIter = getRulesForSource().iterator();
 					try {
@@ -198,7 +198,7 @@ public class HFileRuleReader implements
 					new Path(fileName), cacheConf);
 			HFileRuleReader ruleReader = new HFileRuleReader(hfReader);
 			for (@SuppressWarnings("unused")
-			Pair<RuleWritable, AlignmentAndFeatureMap> entry : ruleReader) {
+			Pair<RuleWritable, RuleData> entry : ruleReader) {
 				++count;
 				++fileCount;
 			}

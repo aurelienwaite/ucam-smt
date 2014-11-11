@@ -29,7 +29,7 @@ import org.apache.hadoop.io.Writable;
 
 /**
  * Additional info about a rule that is used to build mapreduce features. The
- * RuleInfoWritable is the output value in the extraction mapper and the input
+ * ExtractedData is the output value in the extraction mapper and the input
  * key in a mapreduce feature mapper. We don't need to make this class implement
  * WritableComparable because it should never be used as an input key to a
  * reducer.
@@ -37,12 +37,12 @@ import org.apache.hadoop.io.Writable;
  * @author Juan Pino
  * @date 28 May 2014
  */
-public class RuleInfoWritable implements Writable {
+public class ExtractedData implements Writable {
 
 	private ProvenanceCountMap provenance;
 	private AlignmentCountMapWritable alignment;
 
-	public RuleInfoWritable() {
+	public ExtractedData() {
 		provenance = new ProvenanceCountMap();
 		alignment = new AlignmentCountMapWritable();
 	}
@@ -69,7 +69,7 @@ public class RuleInfoWritable implements Writable {
 		alignment.put(align, count);
 	}
 
-	public void increment(RuleInfoWritable other) {
+	public void increment(ExtractedData other) {
 		provenance.increment(other.provenance);
 		alignment.increment(other.alignment);
 	}

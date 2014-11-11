@@ -387,20 +387,25 @@ public final class Rule { // final because immutable class
 	}
 
 	public Rule(RuleWritable rw) {
-		this.leftHandSide = Integer.parseInt(rw.getLeftHandSide().toString());
+		this(rw.getLeftHandSide().toString(),rw.getSource().toString(), 
+				rw.getTarget().toString());
+	}
+	
+	public Rule(String lhs, String source, String target){
+		this.leftHandSide = Integer.parseInt(lhs);
 		this.source = new ArrayList<Integer>();
-		String[] rwSource = rw.getSource().toString().split("_");
+		String[] rwSource = source.split("_");
 		for (String rws : rwSource) {
 			this.source.add(Integer.parseInt(rws));
 		}
 		this.target = new ArrayList<Integer>();
-		String[] rwTarget = rw.getTarget().toString().split("_");
+		String[] rwTarget = target.split("_");
 		for (String rwt : rwTarget) {
 			if (!rwt.isEmpty()) { // check in case the target was empty
 				this.target.add(Integer.parseInt(rwt));
 			}
 		}
-		this.alignment = null;
+		this.alignment = null;		
 	}
 
 	public String toString() {

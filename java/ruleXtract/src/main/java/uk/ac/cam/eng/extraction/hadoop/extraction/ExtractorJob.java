@@ -43,16 +43,15 @@ import uk.ac.cam.eng.extraction.datatypes.Alignment;
 import uk.ac.cam.eng.extraction.datatypes.Rule;
 import uk.ac.cam.eng.extraction.datatypes.SentencePair;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.AlignmentWritable;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceCountMap;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleInfoWritable;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.ExtractedData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TextArrayWritable;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
+import uk.ac.cam.eng.util.CLI;
+import uk.ac.cam.eng.util.CLI.Provenance;
 
 import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.beust.jcommander.Parameters;
 
 /**
  * 
@@ -74,9 +73,9 @@ public class ExtractorJob extends Configured implements Tool {
 		Job job = new Job(conf, "Rule extraction");
 		job.setJarByClass(ExtractorJob.class);
 		job.setMapOutputKeyClass(RuleWritable.class);
-		job.setMapOutputValueClass(RuleInfoWritable.class);
+		job.setMapOutputValueClass(ExtractedData.class);
 		job.setOutputKeyClass(RuleWritable.class);
-		job.setOutputValueClass(RuleInfoWritable.class);
+		job.setOutputValueClass(ExtractedData.class);
 		job.setMapperClass(ExtractorMapper.class);
 		job.setReducerClass(ExtractorReducer.class);
 		job.setCombinerClass(ExtractorReducer.class);
@@ -93,13 +92,12 @@ public class ExtractorJob extends Configured implements Tool {
 	 * add more info to the rule. The output will be the input to mapreduce
 	 * features.
 	 */
-	private static class ExtractorMapper
-			extends
-			Mapper<MapWritable, TextArrayWritable, RuleWritable, RuleInfoWritable> {
+	private static class ExtractorMapper extends
+			Mapper<MapWritable, TextArrayWritable, RuleWritable, ExtractedData> {
 
 		private static final IntWritable ONE = new IntWritable(1);
 
-		private RuleInfoWritable ruleInfo = new RuleInfoWritable();
+		private ExtractedData ruleInfo = new ExtractedData();
 
 		private Map<Text, ByteWritable> prov2Id = new HashMap<>();
 
@@ -109,8 +107,7 @@ public class ExtractorJob extends Configured implements Tool {
 		protected void setup(Context context) throws IOException,
 				InterruptedException {
 			super.setup(context);
-			String provString = context.getConfiguration().get(
-					ProvenanceCountMap.PROV);
+			String provString = context.getConfiguration().get(Provenance.PROV);
 			String[] provs = provString.split(",");
 			if (provs.length + 1 >= Byte.MAX_VALUE) {
 				throw new RuntimeException(
@@ -156,80 +153,41 @@ public class ExtractorJob extends Configured implements Tool {
 		}
 	}
 
-	private static class ExtractorReducer
-			extends
-			Reducer<RuleWritable, RuleInfoWritable, RuleWritable, RuleInfoWritable> {
+	private static class ExtractorReducer extends
+			Reducer<RuleWritable, ExtractedData, RuleWritable, ExtractedData> {
 
-		private RuleInfoWritable compressed = new RuleInfoWritable();
+		private ExtractedData compressed = new ExtractedData();
 
 		@Override
-		protected void reduce(
-				RuleWritable key,
-				Iterable<RuleInfoWritable> values, Context context)
-				throws IOException, InterruptedException {
+		protected void reduce(RuleWritable key, Iterable<ExtractedData> values,
+				Context context) throws IOException, InterruptedException {
 			compressed.clear();
-			for (RuleInfoWritable value : values) {
+			for (ExtractedData value : values) {
 				compressed.increment(value);
 			}
 			context.write(key, compressed);
 		}
 	}
 
-	/**
-	 * Defines command line args.
-	 */
-	@Parameters(separators = "=")
-	public static class ExtractorJobParameters {
-		@Parameter(names = { "--input", "-i" }, description = "Input training data on HDFS", required = true)
-		public String input;
-
-		@Parameter(names = { "--output", "-o" }, description = "Output rules on HDFS", required = true)
-		public String output;
-
-		@Parameter(names = { "--remove_monotonic_repeats"}, description = "Gives an "
-				+ "occurrence count of 1 to monotonic hiero rules (e.g. "
-				+ "phrase-pair <a b c, d e f> with alignment 0-0 1-1 2-2 "
-				+ "generates hiero rule <a X, d X> twice but the count is "
-				+ "still one)")
-		public String remove_monotonic_repeats = "true";
-
-		@Parameter(names = { "--max_source_phrase"}, description = "Maximum source phrase length in a phrase-based rule")
-		public String max_source_phrase = "9";
-		
-		@Parameter(names = { "--max_source_elements"}, description = "Maximum number of source elements (terminals and nonterminals) in a hiero rule")
-		public String max_source_elements = "5";
-
-		@Parameter(names = { "--max_terminal_length" }, description = "Maximum number of consecutive source terminals in a hiero rule")
-		public String max_terminal_length = "5";
-
-		@Parameter(names = { "--max_nonterminal_span" }, description = "Maximum number of source terminals covered by a right-hand-side source nonterminal in a hiero rule")
-		public String max_nonterminal_span = "10";
-
-		@Parameter(names = { "--provenance" }, description = "Comma-separated provenances")
-		public String provenance;
-	}
-
 	public int run(String[] args) throws FileNotFoundException, IOException,
 			ClassNotFoundException, InterruptedException,
 			IllegalArgumentException, IllegalAccessException {
 
-		ExtractorJobParameters params = new ExtractorJobParameters();
+		CLI.ExtractorJobParameters params = new CLI.ExtractorJobParameters();
 		JCommander cmd = new JCommander(params);
 
 		try {
 			cmd.parse(args);
-			Configuration conf = getConf();
-			Util.ApplyConf(cmd, "", conf);
-			Job job = getJob(conf);
-			FileInputFormat.setInputPaths(job, params.input);
-			FileOutputFormat.setOutputPath(job, new Path(params.output));
-			return job.waitForCompletion(true) ? 0 : 1;
 		} catch (ParameterException e) {
 			System.err.println(e.getMessage());
 			cmd.usage();
 		}
-
-		return 1;
+		Configuration conf = getConf();
+		Util.ApplyConf(cmd, conf);
+		Job job = getJob(conf);
+		FileInputFormat.setInputPaths(job, params.input);
+		FileOutputFormat.setOutputPath(job, new Path(params.output));
+		return job.waitForCompletion(true) ? 0 : 1;
 	}
 
 	public static void main(String[] args) throws Exception {

@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Logger;
 
 import org.apache.hadoop.conf.Configuration;
 
@@ -28,6 +27,7 @@ import uk.ac.cam.eng.extraction.datatypes.Alignment;
 import uk.ac.cam.eng.extraction.datatypes.Block;
 import uk.ac.cam.eng.extraction.datatypes.Rule;
 import uk.ac.cam.eng.extraction.datatypes.SentencePair;
+import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.Pair;
 
 /**
@@ -39,9 +39,6 @@ import uk.ac.cam.eng.util.Pair;
  */
 public class RuleExtractor {
 
-	// TODO replace logger with hadoop logger
-	private static Logger logger = Logger
-			.getLogger("uk.ac.cam.eng.extraction.ruleextractor");
 
 	private int MAX_SOURCE_PHRASE = 5; // TODO revise this value, put in
 											// constructor or something
@@ -61,20 +58,15 @@ public class RuleExtractor {
 	private Map<Integer, Map<Integer, Boolean>> Xterm;
 
 	public RuleExtractor(Configuration conf) {
-		MAX_SOURCE_PHRASE = conf.getInt("max_source_phrase", 5);
-		MAX_SOURCE_ELEMENTS = conf.getInt("max_source_elements", 5);
-		MAX_TERMINAL_LENGTH = conf.getInt("max_terminal_length", 5);
-		MAX_NONTERMINAL_SPAN = conf.getInt("max_nonterminal_span", 10);
-		REMOVE_MONOTONIC_REPEATS = conf.getBoolean("remove_monotonic_repeats",
+		MAX_SOURCE_PHRASE = conf.getInt(CLI.RuleParameters.MAX_SOURCE_PHRASE,-1);
+		MAX_SOURCE_ELEMENTS = conf.getInt(CLI.RuleParameters.MAX_SOURCE_ELEMENTS, -1);
+		MAX_TERMINAL_LENGTH = conf.getInt(CLI.RuleParameters.MAX_TERMINAL_LENGTH, -1);
+		MAX_NONTERMINAL_SPAN = conf.getInt(CLI.RuleParameters.MAX_NONTERMINAL_SPAN, -1);
+		REMOVE_MONOTONIC_REPEATS = conf.getBoolean(CLI.ExtractorJobParameters.REMOVE_MONOTONIC_REPEATS,
 				false);
 		XtermX = new HashMap<Integer, Map<Integer, Boolean>>();
 		termX = new HashMap<Integer, Map<Integer, Boolean>>();
 		Xterm = new HashMap<Integer, Map<Integer, Boolean>>();
-	}
-
-	private static String usage() {
-		String res = "Usage: RuleExtractor configFile";
-		return res;
 	}
 
 	/**

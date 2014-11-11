@@ -7,6 +7,8 @@ version := "1.0"
 
 organization := "University of Cambridge"
 
+EclipseKeys.withSource := true
+
 // uncomment this for debugging
 // javacOptions += "-g"
 
@@ -18,8 +20,8 @@ organization := "University of Cambridge"
 libraryDependencies ++= Seq(
 		    "com.beust" % "jcommander" % "1.35",
 		    "org.apache.hadoop" % "hadoop-core" % "1.2.1",
-		    "org.apache.hbase" % "hbase" % "0.92.0",
-		    "junit" % "junit" % "4.11" % "test",
+		    "org.apache.hbase" % "hbase" % "0.92.0" withSources (),
+		    "junit" % "junit" % "4.11" % "test" withSources (),
 			"com.novocode" % "junit-interface" % "0.10" % "test"
 )
 

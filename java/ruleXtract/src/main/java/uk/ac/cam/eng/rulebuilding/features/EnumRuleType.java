@@ -23,7 +23,7 @@ import org.apache.hadoop.io.Text;
  * @date 28 May 2014
  */
 public enum EnumRuleType {
-	EXTRACTED("0"), ASCII_OOV_DELETE("-1"), GLUE("");
+	EXTRACTED("0"), PASSTHROUGH_OOV_DELETE("-1"), GLUE("");
 
 	private EnumRuleType(String lhs) {
 		this.lhs = new Text(lhs);

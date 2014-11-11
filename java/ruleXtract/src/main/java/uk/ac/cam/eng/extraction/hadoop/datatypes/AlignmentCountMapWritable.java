@@ -20,7 +20,6 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Map.Entry;
 
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.file.tfile.Utils;
@@ -29,10 +28,16 @@ import org.apache.hadoop.io.file.tfile.Utils;
  * @author Juan Pino
  * @date 14 July 2014
  */
-class AlignmentCountMapWritable extends
+public class AlignmentCountMapWritable extends
 		HashMap<AlignmentWritable, Integer> implements Writable {
 
+	private static final long serialVersionUID = 1L;
+	
+	
 	public static final AlignmentCountMapWritable EMPTY = new AlignmentCountMapWritable() {
+
+		private static final long serialVersionUID = 1L;
+
 		public Integer put(AlignmentWritable key, Integer value) {
 			throw new UnsupportedOperationException();
 		};

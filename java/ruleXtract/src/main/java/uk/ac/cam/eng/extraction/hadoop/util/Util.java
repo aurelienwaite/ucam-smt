@@ -23,8 +23,6 @@ import java.lang.reflect.Field;
 
 import org.apache.hadoop.conf.Configuration;
 
-import uk.ac.cam.eng.extraction.hadoop.features.MapReduceFeature;
-
 import com.beust.jcommander.JCommander;
 
 /**
@@ -34,51 +32,47 @@ import com.beust.jcommander.JCommander;
  * @author Juan Pino
  * @date 28 May 2014
  */
-public class Util {
+public final class Util {
 
 	private Util() {
 
 	}
 
-	public static void ApplyConf(JCommander cmd, String suffix,
-			Configuration conf) throws IllegalArgumentException,
-			IllegalAccessException {
-		Object params = cmd.getObjects().get(0);
+	/**
+	 * Private recursive helper function to set properties based on JCommander 
+	 * parameter objects
+	 * @param params
+	 * @param conf
+	 * @throws IllegalArgumentException
+	 * @throws IllegalAccessException
+	 */
+	private static void setProps(Object params, Configuration conf)
+			throws IllegalArgumentException, IllegalAccessException {
 		for (Field field : params.getClass().getDeclaredFields()) {
 			String name = field.getName();
-			String value = (String) field.get(params);
-			conf.set(name, value);
-		}
-		String mapreduceFeatures = conf.get("mapreduce_features");
-		if (mapreduceFeatures != null) {
-			// initial feature index is zero, then increments with the number of
-			// features of each feature type. nextFeatureIndex is used to
-			// prevent
-			// conf to be overwritten before being used.
-			int featureIndex = 0, nextFeatureIndex = 0;
-			for (String featureString : mapreduceFeatures.split(",")) {
-				MapReduceFeature feature =
-						MapReduceFeature.findFromConf(featureString);
-				if (feature.isProvenanceFeature()) {
-					for (String provenance : conf.get("provenance").split(",")) {
-						featureIndex = nextFeatureIndex;
-						// the next feature index is the current plus the number
-						// of
-						// features
-						// of the current feature class.
-						nextFeatureIndex += feature.getNumberOfFeatures();
-						conf.setInt(feature.getConfName() + "-" + provenance
-								+ suffix, featureIndex);
-					}
-				} else {
-					featureIndex = nextFeatureIndex;
-					// the next feature index is the current plus the number of
-					// features
-					// of the current feature class.
-					nextFeatureIndex += feature.getNumberOfFeatures();
-					conf.setInt(feature.getConfName() + suffix, featureIndex);
-				}
+			Class<?> clazz = field.getType();
+			Object val = field.get(params);
+			if (Integer.class == clazz){
+				conf.setInt(name, (Integer) val);
+			}else if(Boolean.class == clazz){
+				conf.setBoolean(name, (Boolean)val);
+			}else if (String.class == clazz){
+				conf.set(name, (String) val);
+			}else{
+				setProps(val, conf);
 			}
 		}
 	}
+
+	public static void ApplyConf(JCommander cmd, Configuration conf)
+			throws IllegalArgumentException, IllegalAccessException {
+		Object params = cmd.getObjects().get(0);
+		ApplyConf(params, conf);
+	}
+	
+	public static void ApplyConf(Object params, Configuration conf)
+			throws IllegalArgumentException, IllegalAccessException {
+		setProps(params, conf);
+	}
+
 }

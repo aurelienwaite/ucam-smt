@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -53,16 +54,14 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
 import uk.ac.cam.eng.extraction.datatypes.Rule;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.AlignmentAndFeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
-import uk.ac.cam.eng.extraction.hadoop.util.Util;
+import uk.ac.cam.eng.rule.features.FeatureRegistry;
 import uk.ac.cam.eng.rulebuilding.features.EnumRuleType;
-import uk.ac.cam.eng.rulebuilding.features.FeatureCreator;
+import uk.ac.cam.eng.util.CLI;
+import uk.ac.cam.eng.util.Pair;
 
 import com.beust.jcommander.JCommander;
-import com.beust.jcommander.Parameter;
 import com.beust.jcommander.ParameterException;
-import com.beust.jcommander.Parameters;
 
 /**
  * 
@@ -70,15 +69,13 @@ import com.beust.jcommander.Parameters;
  * @author Aurelien Waite
  * @date 28 May 2014
  * 
- * Rory's improvements to the retriever over Juan's original implementation
- * include: 
- * 1) A better search algorithm that does not query unigrams out of order of the main search 
- * 2) A more compact HFile format, which results in much smaller HFiles and faster access
- * 3) Multithreaded access to HFile partitions.
+ *       Aurelien's improvements to the retriever over Juan's original
+ *       implementation include: 1) A better search algorithm that does not
+ *       query unigrams out of order of the main search 2) A more compact HFile
+ *       format, which results in much smaller HFiles and faster access 3)
+ *       Multithreaded access to HFile partitions.
  */
 public class RuleRetriever extends Configured implements Tool {
-
-	private static final String RETRIEVEL_THREADS = "retrieval.threads";
 
 	private BloomFilter[] bfs;
 
@@ -88,45 +85,40 @@ public class RuleRetriever extends Configured implements Tool {
 
 	RuleFilter filter;
 
-	private String asciiConstraintsFileName;
+	private String passThroughRulesFileName;
 
-	Set<RuleWritable> asciiConstraints;
+	Set<RuleWritable> passThroughRules;
 
-	Set<RuleWritable> foundAsciiConstraints = new HashSet<>();
+	Set<RuleWritable> foundPassThroughRules = new HashSet<>();
 
 	Set<Text> testVocab;
 
 	Set<Text> foundTestVocab = new HashSet<>();
 
-	private int MAX_SOURCE_PHRASE;
+	private int maxSourcePhrase;
+	
+	FeatureRegistry fReg;
 
-	private void setup(String testFile, Configuration conf)
+	private void setup(String testFile, CLI.RuleRetrieverParameters params)
 			throws FileNotFoundException, IOException {
-
-		asciiConstraintsFileName = conf.get("pass_through_rules");
-		String filterConfig = conf.get("filter_config");
-		if (filterConfig == null) {
-			System.err
-					.println("Missing property 'filter_config' in the config");
-			System.exit(1);
-		}
-		MAX_SOURCE_PHRASE = conf.getInt("max_source_phrase", 5);
-		filter = new RuleFilter(conf);
-		asciiConstraints = getAsciiConstraints();
+		fReg = new FeatureRegistry(params.features.features, params.provenance.provenance);
+		passThroughRulesFileName = params.passThroughRules;
+		filter = new RuleFilter(params.fp, fReg);
+		passThroughRules = getPassThroughRules();
 		Set<Text> fullTestVocab = getTestVocab(testFile);
-		Set<Text> asciiVocab = getAsciiVocab();
+		Set<Text> passThroughVocab = getPassThroughVocab();
 		testVocab = new HashSet<>();
 		for (Text word : fullTestVocab) {
-			if (!asciiVocab.contains(word)) {
+			if (!passThroughVocab.contains(word)) {
 				testVocab.add(word);
 			}
 		}
-
 	}
 
-	private void loadDir(String dirString, Configuration conf)
+	private void loadDir(String dirString)
 			throws IOException {
 		File dir = new File(dirString);
+		Configuration conf = new Configuration();
 		CacheConfig cacheConf = new CacheConfig(conf);
 		if (!dir.isDirectory()) {
 			throw new IOException(dirString + " is not a directory!");
@@ -154,10 +146,10 @@ public class RuleRetriever extends Configured implements Tool {
 		}
 	}
 
-	private Set<RuleWritable> getAsciiConstraints() throws IOException {
+	private Set<RuleWritable> getPassThroughRules() throws IOException {
 		Set<RuleWritable> res = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(
-				asciiConstraintsFileName))) {
+				passThroughRulesFileName))) {
 			String line;
 			Pattern regex = Pattern.compile(".*: (.*) # (.*)");
 			Matcher matcher;
@@ -167,15 +159,15 @@ public class RuleRetriever extends Configured implements Tool {
 					String[] sourceString = matcher.group(1).split(" ");
 					String[] targetString = matcher.group(2).split(" ");
 					if (sourceString.length != targetString.length) {
-						System.err.println("Malformed ascii constraint file: "
-								+ asciiConstraintsFileName);
+						System.err.println("Malformed pass through rules file: "
+								+ passThroughRulesFileName);
 						System.exit(1);
 					}
 					List<Integer> source = new ArrayList<Integer>();
 					List<Integer> target = new ArrayList<Integer>();
 					int i = 0;
 					while (i < sourceString.length) {
-						if (i % MAX_SOURCE_PHRASE == 0 && i > 0) {
+						if (i % maxSourcePhrase == 0 && i > 0) {
 							Rule rule = new Rule(-1, source, target);
 							res.add(new RuleWritable(rule));
 							source.clear();
@@ -188,8 +180,8 @@ public class RuleRetriever extends Configured implements Tool {
 					Rule rule = new Rule(-1, source, target);
 					res.add(new RuleWritable(rule));
 				} else {
-					System.err.println("Malformed ascii constraint file: "
-							+ asciiConstraintsFileName);
+					System.err.println("Malformed pass through rules file: "
+							+ passThroughRulesFileName);
 					System.exit(1);
 				}
 			}
@@ -197,17 +189,16 @@ public class RuleRetriever extends Configured implements Tool {
 		return res;
 	}
 
-	private Set<Text> getAsciiVocab() throws IOException {
+	private Set<Text> getPassThroughVocab() throws IOException {
 		// TODO simplify all template writing
 		// TODO getAsciiVocab is redundant with getAsciiConstraints
 		Set<Text> res = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(
-				asciiConstraintsFileName))) {
+				passThroughRulesFileName))) {
 			String line;
 			Pattern regex = Pattern.compile(".*: (.*) # (.*)");
-			Matcher matcher;
 			while ((line = br.readLine()) != null) {
-				matcher = regex.matcher(line);
+				Matcher matcher = regex.matcher(line);
 				if (matcher.matches()) {
 					String[] sourceString = matcher.group(1).split(" ");
 					// only one word
@@ -215,8 +206,8 @@ public class RuleRetriever extends Configured implements Tool {
 						res.add(new Text(sourceString[0]));
 					}
 				} else {
-					System.err.println("Malformed ascii constraint file: "
-							+ asciiConstraintsFileName);
+					System.err.println("Malformed pass through rules constraint file: "
+							+ passThroughRulesFileName);
 					System.exit(1);
 				}
 			}
@@ -239,37 +230,36 @@ public class RuleRetriever extends Configured implements Tool {
 		return res;
 	}
 
-	public Collection<RuleWritable> getGlueRules() {
-		List<RuleWritable> res = new ArrayList<>();
+	public Collection<Pair<RuleWritable, SortedMap<Integer, Double>>> getGlueRules() {
+		List<Pair<RuleWritable, SortedMap<Integer, Double>>> res = new ArrayList<>();
 		List<Integer> sideGlueRule1 = new ArrayList<Integer>();
 		sideGlueRule1.add(-4);
 		sideGlueRule1.add(-1);
 		Rule glueRule1 = new Rule(-4, sideGlueRule1, sideGlueRule1);
-		res.add(new RuleWritable(glueRule1));
+		res.add(Pair.createPair(new RuleWritable(glueRule1), fReg.getDefaultGlueFeatures()));
 		List<Integer> sideGlueRule2 = new ArrayList<Integer>();
 		sideGlueRule2.add(-1);
 		Rule glueRule2 = new Rule(-1, sideGlueRule2, sideGlueRule2);
-		res.add(new RuleWritable(glueRule2));
+		res.add(Pair.createPair(new RuleWritable(glueRule2), fReg.getDefaultGlueFeatures()));
 		List<Integer> sideGlueRule3 = new ArrayList<>();
 		sideGlueRule3.add(-1);
 		Rule glueRule3 = new Rule(-4, sideGlueRule3, sideGlueRule3);
-		res.add(new RuleWritable(glueRule3));
+		res.add(Pair.createPair(new RuleWritable(glueRule3), fReg.getDefaultGlueFeatures()));
 		List<Integer> startSentenceSide = new ArrayList<Integer>();
 		startSentenceSide.add(1);
 		Rule startSentence = new Rule(-1, startSentenceSide, startSentenceSide);
-		res.add(new RuleWritable(startSentence));
+		res.add(Pair.createPair(new RuleWritable(startSentence), fReg.getDefaultGlueStartOrEndFeatures()));
 		List<Integer> endSentenceSide = new ArrayList<Integer>();
 		endSentenceSide.add(2);
 		Rule endSentence = new Rule(-1, endSentenceSide, endSentenceSide);
-		res.add(new RuleWritable(endSentence));
+		res.add(Pair.createPair(new RuleWritable(endSentence), fReg.getDefaultGlueStartOrEndFeatures()));
 		return res;
 	}
 
 	private List<Set<Text>> generateQueries(String testFileName,
-			Configuration conf) throws IOException {
+			CLI.RuleRetrieverParameters params) throws IOException {
 		PatternInstanceCreator patternInstanceCreator = new PatternInstanceCreator(
-				conf);
-		patternInstanceCreator.createSourcePatterns();
+				params, filter.getPermittedSourcePatterns());
 		List<Set<Text>> queries = new ArrayList<>(readers.length);
 		for (int i = 0; i < readers.length; ++i) {
 			queries.add(new HashSet<Text>());
@@ -303,68 +293,32 @@ public class RuleRetriever extends Configured implements Tool {
 		}
 		return queries;
 	}
-
-	/**
-	 * Defines command line args.
-	 */
-	@Parameters(separators = "=")
-	public static class RuleRetrieverParameters {
-		@Parameter(names = { "--max_source_phrase" }, description = "Maximum source phrase length in a phrase-based rule")
-		public String max_source_phrase = "9";
-
-		@Parameter(names = { "--max_source_elements" }, description = "Maximum number of source elements (terminals and nonterminals) in a hiero rule")
-		public String max_source_elements = "5";
-
-		@Parameter(names = { "--max_terminal_length" }, description = "Maximum number of consecutive terminals in a hiero rule")
-		public String max_terminal_length = "5";
-
-		@Parameter(names = { "--max_nonterminal_span" }, description = "Maximum number of source terminals covered by a right-hand-side source nonterminal in a hiero rule")
-		public String max_nonterminal_span = "10";
-
-		@Parameter(names = { "--hr_max_height" }, description = "Maximum number of source terminals covered by the left-hand-side nonterminal in a hiero rule")
-		public String hr_max_height = "10";
-
-		@Parameter(names = { "--mapreduce_features" }, description = "Comma-separated list of mapreduce features", required = true)
-		public String mapreduce_features;
-
-		@Parameter(names = { "--provenance" }, description = "Comma-separated list of provenances")
-		public String provenance;
-
-		@Parameter(names = { "--features" }, description = "Comma-separated list of features, including mapreduce features", required = true)
-		public String features;
-
-		@Parameter(names = { "--pass_through_rules" }, description = "File containing pass-through rules")
-		public String pass_through_rules;
-
-		@Parameter(names = { "--filter_config" }, description = "File containing additional filtering configuration, e.g. min source-to-target probability")
-		public String filter_config;
-
-		@Parameter(names = { "--source_patterns" }, description = "File containing a list of allowed source patterns")
-		public String source_patterns;
-
-		@Parameter(names = { "--ttable_s2t_server_port" }, description = "TTable source-to-target server port")
-		public String ttable_s2t_server_port = "4949";
-
-		@Parameter(names = { "--ttable_s2t_host" }, description = "TTable source-to-target host name")
-		public String ttable_s2t_host = "localhost";
-
-		@Parameter(names = { "--ttable_t2s_server_port" }, description = "TTable target-to-source server port")
-		public String ttable_t2s_server_port = "9494";
-
-		@Parameter(names = { "--ttable_t2s_host" }, description = "TTable target-to-source host name")
-		public String ttable_t2s_host = "localhost";
-
-		@Parameter(names = { "--retrieval_threads" }, description = "Number of threads for retrieval, corresponds to the number of hfiles")
-		public String retrieval_threads;
-
-		@Parameter(names = { "--hfile" }, description = "Directory containing the hfiles")
-		public String hfile;
-
-		@Parameter(names = { "--test_file" }, description = "File containing the sentences to be translated")
-		public String test_file;
-
-		@Parameter(names = { "--rules" }, description = "Output file containing filtered rules")
-		public String rules;
+	
+	
+	public void writeRule(RuleWritable rule, SortedMap<Integer, Double> processedFeatures,
+			BufferedWriter out) {
+		StringBuilder res = new StringBuilder();
+		res.append(rule);
+		for (int featureIndex : processedFeatures.keySet()) {
+			double featureValue = processedFeatures.get(featureIndex);
+			// one-based index
+			int index = featureIndex + 1;
+			if (Math.floor(featureValue) == featureValue) {
+				int featureValueInt = (int) featureValue;
+				res.append(String.format(" %d@%d", featureValueInt, index));
+			} else {
+				res.append(String.format(" %f@%d", featureValue, index));
+			}
+		}
+		res.append("\n");
+		synchronized (out) {
+			try {
+				out.write(res.toString());
+			} catch (IOException e) {
+				e.printStackTrace();
+				System.exit(1);
+			}
+		}
 	}
 
 	/**
@@ -378,84 +332,75 @@ public class RuleRetriever extends Configured implements Tool {
 	public int run(String[] args) throws FileNotFoundException, IOException,
 			InterruptedException, IllegalArgumentException,
 			IllegalAccessException {
-		RuleRetrieverParameters params = new RuleRetrieverParameters();
+		CLI.RuleRetrieverParameters params = new CLI.RuleRetrieverParameters();
 		JCommander cmd = new JCommander(params);
-
 		try {
 			cmd.parse(args);
-			Configuration conf = getConf();
-			Util.ApplyConf(cmd, FeatureCreator.MAPRED_SUFFIX, conf);
-			RuleRetriever retriever = new RuleRetriever();
-			retriever.loadDir(params.hfile, conf);
-			retriever.setup(params.test_file, conf);
-			StopWatch stopWatch = new StopWatch();
-			stopWatch.start();
-			System.err.println("Generating query");
-			List<Set<Text>> queries = retriever.generateQueries(
-					params.test_file, conf);
-			System.err.printf("Query took %d seconds to generate\n",
-					stopWatch.getTime() / 1000);
-			System.err.println("Executing queries");
-			try (BufferedWriter out = new BufferedWriter(
-					new OutputStreamWriter(new GZIPOutputStream(
-							new FileOutputStream(params.rules))))) {
-				FeatureCreator features = new FeatureCreator(conf);
-				ExecutorService threadPool = Executors.newFixedThreadPool(conf
-						.getInt(RETRIEVEL_THREADS, 1));
-
-				for (int i = 0; i < queries.size(); ++i) {
-					HFileRuleQuery query = new HFileRuleQuery(
-							retriever.readers[i], retriever.bfs[i], out,
-							queries.get(i), features, retriever, conf);
-					threadPool.execute(query);
-				}
-				threadPool.shutdown();
-				threadPool.awaitTermination(1, TimeUnit.DAYS);
-				// Add ascii constraints not already found in query
-				for (RuleWritable asciiConstraint : retriever.asciiConstraints) {
-					if (!retriever.foundAsciiConstraints
-							.contains(asciiConstraint)) {
-						features.writeRule(asciiConstraint,
-								AlignmentAndFeatureMap.EMPTY,
-								EnumRuleType.ASCII_OOV_DELETE, out);
-					}
-				}
-				// Add Deletetion and OOV rules
-				RuleWritable deletionRuleWritable = new RuleWritable();
-				deletionRuleWritable.setLeftHandSide(new Text(
-						EnumRuleType.ASCII_OOV_DELETE.getLhs()));
-				deletionRuleWritable.setTarget(new Text("0"));
-				RuleWritable oovRuleWritable = new RuleWritable();
-				oovRuleWritable.setLeftHandSide(new Text(
-						EnumRuleType.ASCII_OOV_DELETE.getLhs()));
-				oovRuleWritable.setTarget(new Text(""));
-				for (Text source : retriever.testVocab) {
-					if (retriever.foundTestVocab.contains(source)) {
-						deletionRuleWritable.setSource(source);
-						features.writeRule(deletionRuleWritable,
-								AlignmentAndFeatureMap.EMPTY,
-								EnumRuleType.ASCII_OOV_DELETE, out);
-					} else {
-						oovRuleWritable.setSource(source);
-						features.writeRule(oovRuleWritable,
-								AlignmentAndFeatureMap.EMPTY,
-								EnumRuleType.ASCII_OOV_DELETE, out);
-					}
-				}
-				// Glue rules
-				for (RuleWritable glueRule : retriever.getGlueRules()) {
-					features.writeRule(glueRule, AlignmentAndFeatureMap.EMPTY,
-							EnumRuleType.GLUE, out);
-				}
-			}
-			System.out.println(retriever.foundAsciiConstraints);
-			System.out.println(retriever.foundTestVocab);
 		} catch (ParameterException e) {
 			System.err.println(e.getMessage());
 			cmd.usage();
 		}
+		RuleRetriever retriever = new RuleRetriever();
+		retriever.loadDir(params.hfile);
+		retriever.setup(params.testFile, params);
+		StopWatch stopWatch = new StopWatch();
+		stopWatch.start();
+		System.err.println("Generating query");
+		List<Set<Text>> queries = retriever.generateQueries(params.testFile,
+				params);
+		System.err.printf("Query took %d seconds to generate\n",
+				stopWatch.getTime() / 1000);
+		System.err.println("Executing queries");
+		try (BufferedWriter out = new BufferedWriter(new OutputStreamWriter(
+				new GZIPOutputStream(new FileOutputStream(params.rules))))) {
+			ExecutorService threadPool = Executors.newFixedThreadPool(params.retrievalThreads);
 
-		return 1;
+			for (int i = 0; i < queries.size(); ++i) {
+				HFileRuleQuery query = new HFileRuleQuery(retriever.readers[i],
+						retriever.bfs[i], out, queries.get(i),
+						retriever, params.sp);
+				threadPool.execute(query);
+			}
+			threadPool.shutdown();
+			threadPool.awaitTermination(1, TimeUnit.DAYS);
+			// Add pass through rule not already found in query
+			for (RuleWritable passThroughRule : retriever.passThroughRules) {
+				if (!retriever.foundPassThroughRules.contains(passThroughRule)) {
+					writeRule(passThroughRule,
+							fReg.getDefaultPassThroughRuleFeatures(), out);
+				}
+			}
+			// Add Deletetion and OOV rules
+			RuleWritable deletionRuleWritable = new RuleWritable();
+			deletionRuleWritable.setLeftHandSide(new Text(
+					EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs()));
+			deletionRuleWritable.setTarget(new Text("0"));
+			RuleWritable oovRuleWritable = new RuleWritable();
+			oovRuleWritable.setLeftHandSide(new Text(
+					EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs()));
+			oovRuleWritable.setTarget(new Text(""));
+			for (Text source : retriever.testVocab) {
+				//Write deletion rule
+				if (retriever.foundTestVocab.contains(source)) {
+					deletionRuleWritable.setSource(source);
+					writeRule(deletionRuleWritable,
+							fReg.getDefaultDeletionFeatures(), out);
+				//Otherwise is an OOV
+				} else {
+					oovRuleWritable.setSource(source);
+					writeRule(oovRuleWritable,
+							fReg.getDefaultOOVFeatures(), out);
+				}
+			}
+			// Glue rules
+			for (Pair<RuleWritable, SortedMap<Integer, Double>> glueRule : retriever.getGlueRules()) {
+				writeRule(glueRule.getFirst(), glueRule.getSecond(), out);
+			}
+		}
+		System.out.println(retriever.foundPassThroughRules);
+		System.out.println(retriever.foundTestVocab);
+
+		return 0;
 	}
 
 	public static void main(String[] args) throws Exception {

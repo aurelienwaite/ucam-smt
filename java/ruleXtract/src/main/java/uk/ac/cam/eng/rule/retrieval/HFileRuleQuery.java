@@ -17,30 +17,24 @@ package uk.ac.cam.eng.rule.retrieval;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.SortedMap;
 
 import org.apache.commons.lang.time.StopWatch;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.util.BloomFilter;
 import org.apache.hadoop.io.DataOutputBuffer;
 import org.apache.hadoop.io.Text;
 
-import uk.ac.cam.eng.extraction.hadoop.datatypes.AlignmentAndFeatureMap;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceCountMap;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.features.lexical.TTableClient;
 import uk.ac.cam.eng.extraction.hadoop.merge.MergeComparator;
 import uk.ac.cam.eng.rulebuilding.features.EnumRuleType;
-import uk.ac.cam.eng.rulebuilding.features.FeatureCreator;
+import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.Pair;
 
 /**
@@ -60,59 +54,50 @@ class HFileRuleQuery implements Runnable {
 
 	private final Collection<Text> query;
 
-	private final FeatureCreator features;
-
 	private final RuleRetriever retriever;
 
 	private final TTableClient s2tClient;
 
 	private final TTableClient t2sClient;
 
-	private final LinkedList<Pair<RuleWritable, AlignmentAndFeatureMap>> queue = new LinkedList<>();
-
-	private Configuration conf;
+	private final LinkedList<Pair<RuleWritable, RuleData>> queue = new LinkedList<>();
 
 	private DataOutputBuffer tempOut = new DataOutputBuffer();
 
 	public HFileRuleQuery(HFileRuleReader reader, BloomFilter bf,
 			BufferedWriter out, Collection<Text> query,
-			FeatureCreator features, RuleRetriever retriever, Configuration conf) {
+			RuleRetriever retriever, CLI.ServerParams params) {
 		this.reader = reader;
 		this.bf = bf;
 		this.out = out;
 		this.query = query;
-		this.features = features;
 		this.retriever = retriever;
 		this.s2tClient = new TTableClient();
 		this.t2sClient = new TTableClient();
-		this.conf = conf;
-		try {
-			s2tClient.setup(conf, true);
-			t2sClient.setup(conf, false);
-		} catch (UnknownHostException e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
+		s2tClient.setup(params, retriever.fReg, true);
+		t2sClient.setup(params, retriever.fReg, false);
 	}
 
 	private void drainQueue() throws IOException {
 		s2tClient.queryRules(queue);
 		t2sClient.queryRules(queue);
-		for (Pair<RuleWritable, AlignmentAndFeatureMap> entry : queue) {
+		for (Pair<RuleWritable, RuleData> entry : queue) {
 			RuleWritable rule = entry.getFirst();
-			AlignmentAndFeatureMap rawFeatures = entry.getSecond();
-			if (retriever.asciiConstraints.contains(rule)) {
+			RuleData rawFeatures = entry.getSecond();
+			if (retriever.passThroughRules.contains(rule)) {
 				RuleWritable asciiRule = new RuleWritable(rule);
 				asciiRule.setLeftHandSide(new Text(
-						EnumRuleType.ASCII_OOV_DELETE.getLhs()));
-				synchronized (retriever.foundAsciiConstraints) {
-					retriever.foundAsciiConstraints.add(asciiRule);
+						EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs()));
+				synchronized (retriever.foundPassThroughRules) {
+					retriever.foundPassThroughRules.add(asciiRule);
 				}
-				features.writeRule(rule, rawFeatures,
-						EnumRuleType.ASCII_OOV_DELETE, out);
+				retriever.writeRule(rule, retriever.fReg
+						.createFoundPassThroughRuleFeatures(rawFeatures
+								.getFeatures()), out);
 			} else {
-				features.writeRule(rule, rawFeatures,
-						EnumRuleType.EXTRACTED, out);
+				SortedMap<Integer, Double> processed = retriever.fReg
+						.processFeatures(rule, rawFeatures);
+				retriever.writeRule(rule, processed, out);
 			}
 
 		}
@@ -149,50 +134,15 @@ class HFileRuleQuery implements Runnable {
 							retriever.foundTestVocab.add(source);
 						}
 					}
-					Set<RuleWritable> existingRules = new HashSet<>();
-					List<Pair<RuleWritable, AlignmentAndFeatureMap>> allFiltered = new ArrayList<>();
-					List<String> provenances = new ArrayList<>();
-					provenances.add("");
-					provenances.addAll(conf
-							.getStringCollection(ProvenanceCountMap.PROV));
-					for (String provenance : provenances) {
-						if (!retriever.filter.isProvenanceUnion()
-								&& !provenance.equals("")) {
-							continue;
-						}
-						SortedSet<Pair<RuleWritable, AlignmentAndFeatureMap>> rules = new TreeSet<Pair<RuleWritable, AlignmentAndFeatureMap>>(
-								retriever.filter.getComparator(provenance));
-						for (Pair<RuleWritable, AlignmentAndFeatureMap> entry : reader
-								.getRulesForSource()) {
-							RuleWritable rule = entry.getFirst();
-							AlignmentAndFeatureMap rawFeatures = entry
-									.getSecond();
-							if (retriever.filter.filterRule(sourcePattern,
-									rule, rawFeatures.getSecond(),
-									provenance)) {
-								continue;
-							}
-							rules.add(Pair.createPair(new RuleWritable(rule),
-									rawFeatures));
-						}
-						List<Pair<RuleWritable, AlignmentAndFeatureMap>> filtered = retriever.filter
-								.filterRulesBySource(sourcePattern, rules,
-										provenance);
-						for (Pair<RuleWritable, AlignmentAndFeatureMap> ruleFiltered : filtered) {
-							if (!existingRules
-									.contains(ruleFiltered.getFirst())) {
-								allFiltered.add(ruleFiltered);
-								existingRules.add(ruleFiltered.getFirst());
-							}
-						}
-					}
-					queue.addAll(allFiltered);
+					Iterable<Pair<RuleWritable, RuleData>> rules = reader
+							.getRulesForSource();
+					List<Pair<RuleWritable, RuleData>> filtered = retriever.filter
+							.filter(sourcePattern, rules);
+					queue.addAll(filtered);
 					if (queue.size() > BATCH_SIZE) {
 						drainQueue();
 					}
-
 				}
-
 			}
 			drainQueue();
 		} catch (IOException e) {

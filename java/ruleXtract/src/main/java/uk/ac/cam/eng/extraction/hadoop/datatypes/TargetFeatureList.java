@@ -37,9 +37,9 @@ import uk.ac.cam.eng.util.Pair;
  * @date 28 May 2014
  */
 public class TargetFeatureList implements
-		List<Pair<Text, AlignmentAndFeatureMap>>, Writable {
+		List<Pair<Text, RuleData>>, Writable {
 
-	private List<Pair<Text, AlignmentAndFeatureMap>> instance = new ArrayList<>();
+	private List<Pair<Text, RuleData>> instance = new ArrayList<>();
 
 	public int size() {
 		return instance.size();
@@ -53,7 +53,7 @@ public class TargetFeatureList implements
 		return instance.contains(o);
 	}
 
-	public Iterator<Pair<Text, AlignmentAndFeatureMap>> iterator() {
+	public Iterator<Pair<Text, RuleData>> iterator() {
 		return instance.iterator();
 	}
 
@@ -65,7 +65,7 @@ public class TargetFeatureList implements
 		return instance.toArray(a);
 	}
 
-	public boolean add(Pair<Text, AlignmentAndFeatureMap> e) {
+	public boolean add(Pair<Text, RuleData> e) {
 		return instance.add(e);
 	}
 
@@ -78,12 +78,12 @@ public class TargetFeatureList implements
 	}
 
 	public boolean addAll(
-			Collection<? extends Pair<Text, AlignmentAndFeatureMap>> c) {
+			Collection<? extends Pair<Text, RuleData>> c) {
 		return instance.addAll(c);
 	}
 
 	public boolean addAll(int index,
-			Collection<? extends Pair<Text, AlignmentAndFeatureMap>> c) {
+			Collection<? extends Pair<Text, RuleData>> c) {
 		return instance.addAll(index, c);
 	}
 
@@ -107,21 +107,21 @@ public class TargetFeatureList implements
 		return instance.hashCode();
 	}
 
-	public Pair<Text, AlignmentAndFeatureMap> get(int index) {
+	public Pair<Text, RuleData> get(int index) {
 		return instance.get(index);
 	}
 
-	public Pair<Text, AlignmentAndFeatureMap> set(int index,
-			Pair<Text, AlignmentAndFeatureMap> element) {
+	public Pair<Text, RuleData> set(int index,
+			Pair<Text, RuleData> element) {
 		return instance.set(index, element);
 	}
 
 	public void add(int index,
- Pair<Text, AlignmentAndFeatureMap> element) {
+ Pair<Text, RuleData> element) {
 		instance.add(index, element);
 	}
 
-	public Pair<Text, AlignmentAndFeatureMap> remove(int index) {
+	public Pair<Text, RuleData> remove(int index) {
 		return instance.remove(index);
 	}
 
@@ -133,16 +133,16 @@ public class TargetFeatureList implements
 		return instance.lastIndexOf(o);
 	}
 
-	public ListIterator<Pair<Text, AlignmentAndFeatureMap>> listIterator() {
+	public ListIterator<Pair<Text, RuleData>> listIterator() {
 		return instance.listIterator();
 	}
 
-	public ListIterator<Pair<Text, AlignmentAndFeatureMap>> listIterator(
+	public ListIterator<Pair<Text, RuleData>> listIterator(
 			int index) {
 		return instance.listIterator(index);
 	}
 
-	public List<Pair<Text, AlignmentAndFeatureMap>> subList(
+	public List<Pair<Text, RuleData>> subList(
 			int fromIndex, int toIndex) {
 		return instance.subList(fromIndex, toIndex);
 	}
@@ -150,7 +150,7 @@ public class TargetFeatureList implements
 	@Override
 	public void write(DataOutput out) throws IOException {
 		WritableUtils.writeVInt(out, instance.size());
-		for (Pair<Text, AlignmentAndFeatureMap> entry : instance) {
+		for (Pair<Text, RuleData> entry : instance) {
 			entry.getFirst().write(out);
 			entry.getSecond().write(out);
 		}
@@ -163,7 +163,7 @@ public class TargetFeatureList implements
 		for (int i = 0; i < size; ++i) {
 			Text target = new Text();
 			target.readFields(in);
-			AlignmentAndFeatureMap alignmentAndFeatures = new AlignmentAndFeatureMap();
+			RuleData alignmentAndFeatures = new RuleData();
 			alignmentAndFeatures.readFields(in);
 			instance.add(Pair.createPair(target, alignmentAndFeatures));
 		}

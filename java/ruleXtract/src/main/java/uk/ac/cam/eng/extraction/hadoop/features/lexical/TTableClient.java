@@ -17,24 +17,21 @@ package uk.ac.cam.eng.extraction.hadoop.features.lexical;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.hadoop.conf.Configuration;
-
-import uk.ac.cam.eng.extraction.hadoop.datatypes.AlignmentAndFeatureMap;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceCountMap;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
-import uk.ac.cam.eng.rulebuilding.features.FeatureCreator;
+import uk.ac.cam.eng.rule.features.Feature;
+import uk.ac.cam.eng.rule.features.FeatureRegistry;
+import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.Pair;
 
 /**
@@ -43,14 +40,6 @@ import uk.ac.cam.eng.util.Pair;
  * @date 28 May 2014
  */
 public class TTableClient {
-
-	private static final String S2T_FEATURE_NAME = "source2target_lexical_probability";
-
-	private static final String T2S_FEATURE_NAME = "target2source_lexical_probability";
-
-	private static final String S2T_HOST_NAME = "ttable_s2t_host";
-
-	private static final String T2S_HOST_NAME = "ttable_t2s_host";
 
 	private String hostName;
 
@@ -62,23 +51,21 @@ public class TTableClient {
 
 	private int[] mapping;
 
-	public void setup(Configuration conf, boolean source2Target)
-			throws UnknownHostException {
-		String featureName;
+	public void setup(CLI.ServerParams params,
+			FeatureRegistry fReg, boolean source2Target) {
 		if (source2Target) {
-			port = conf.getInt(TTableServer.TTABLE_S2T_SERVER_PORT, -1);
-			hostName = conf.get(S2T_HOST_NAME);
-			featureName = TTableClient.S2T_FEATURE_NAME;
+			port = params.ttableS2TServerPort;
+			hostName = params.ttableS2THost;
+			mapping = fReg.getFeatureIndices(
+					Feature.SOURCE_2_TARGET_LEXICAL_PROBABILITY,
+					Feature.PROVENANCE_SOURCE_2_TARGET_LEXICAL_PROBABILITY);
 		} else {
-			port = conf.getInt(TTableServer.TTABLE_T2S_SERVER_PORT, -1);
-			hostName = conf.get(T2S_HOST_NAME);
-			featureName = TTableClient.T2S_FEATURE_NAME;
+			port = params.ttableT2SServerPort;
+			hostName = params.ttableT2SHost;
+			mapping = fReg.getFeatureIndices(
+					Feature.TARGET_2_SOURCE_LEXICAL_PROBABILITY,
+					Feature.PROVENANCE_TARGET_2_SOURCE_LEXICAL_PROBABILITY);
 		}
-		if (port == -1) {
-			throw new UnknownHostException("TTable server port incorrect!");
-		}
-		mapping = ProvenanceCountMap.getFeatureIndex(featureName,
-				FeatureCreator.MAPRED_SUFFIX, conf);
 		prob = new LexicalProbability(source2Target);
 	}
 
@@ -115,9 +102,9 @@ public class TTableClient {
 	}
 
 	public void queryRules(
-			List<Pair<RuleWritable, AlignmentAndFeatureMap>> rules)
+			List<Pair<RuleWritable, RuleData>> rules)
 			throws IOException {
-		for (Pair<RuleWritable, AlignmentAndFeatureMap> entry : rules) {
+		for (Pair<RuleWritable, RuleData> entry : rules) {
 			RuleWritable key = entry.getFirst();
 			prob.buildQuery(key, mapping.length, wordAlignments);
 		}
@@ -129,17 +116,17 @@ public class TTableClient {
 				wordAlignments.put(keys.get(i), results[i]);
 			}
 		}
-		for (Pair<RuleWritable, AlignmentAndFeatureMap> entry : rules) {
+		for (Pair<RuleWritable, RuleData> entry : rules) {
 			RuleWritable key = entry.getFirst();
-			AlignmentAndFeatureMap features = entry.getSecond();
+			RuleData features = entry.getSecond();
 			for (int j = 0; j < mapping.length; ++j) {
 				double lexProb = prob.value(key, (byte) j, wordAlignments);
-				if (features.getSecond().containsKey(mapping[j])) {
+				if (features.getFeatures().containsKey(mapping[j])) {
 					throw new RuntimeException(
 							"FeatureMap already contains entry for "
 									+ mapping[j] + " " + key + " " + features);
 				}
-				features.getSecond().put(mapping[j], lexProb);
+				features.getFeatures().put(mapping[j], lexProb);
 			}
 		}
 	}
