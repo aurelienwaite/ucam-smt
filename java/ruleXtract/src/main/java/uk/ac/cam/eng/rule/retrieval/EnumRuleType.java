@@ -13,7 +13,7 @@
  *
  * Copyright 2014 - Juan Pino, Aurelien Waite, William Byrne
  *******************************************************************************/
-package uk.ac.cam.eng.rulebuilding.features;
+package uk.ac.cam.eng.rule.retrieval;
 
 import org.apache.hadoop.io.Text;
 

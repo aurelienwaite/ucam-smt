@@ -50,7 +50,6 @@ import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.CLI.Provenance;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
 
 /**
@@ -174,16 +173,13 @@ public class ExtractorJob extends Configured implements Tool {
 			IllegalArgumentException, IllegalAccessException {
 
 		CLI.ExtractorJobParameters params = new CLI.ExtractorJobParameters();
-		JCommander cmd = new JCommander(params);
-
 		try {
-			cmd.parse(args);
+			Util.parseCommandLine(args, params);
 		} catch (ParameterException e) {
-			System.err.println(e.getMessage());
-			cmd.usage();
+			return 1;
 		}
 		Configuration conf = getConf();
-		Util.ApplyConf(cmd, conf);
+		Util.ApplyConf(params, conf);
 		Job job = getJob(conf);
 		FileInputFormat.setInputPaths(job, params.input);
 		FileOutputFormat.setOutputPath(job, new Path(params.output));

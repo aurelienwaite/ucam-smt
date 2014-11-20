@@ -46,6 +46,12 @@ public class RuleData implements Writable {
 		alignments = new AlignmentCountMapWritable();
 		features = new FeatureMap();
 	}
+	
+	public RuleData(RuleData other){
+		this.provCounts = new ProvenanceCountMap(other.provCounts);
+		this.alignments = new AlignmentCountMapWritable(other.alignments);
+		this.features = new FeatureMap(other.features);
+	}
 
 	public RuleData(ProvenanceCountMap provCounts, AlignmentCountMapWritable alignments,
 			FeatureMap features) {
@@ -102,6 +108,12 @@ public class RuleData implements Writable {
 
 	public void setFeatures(FeatureMap features) {
 		this.features = features;
+	}
+
+	@Override
+	public String toString() {
+		return "RuleData [provCounts=" + provCounts + ", alignments="
+				+ alignments + ", features=" + features + "]";
 	}
 	
 	

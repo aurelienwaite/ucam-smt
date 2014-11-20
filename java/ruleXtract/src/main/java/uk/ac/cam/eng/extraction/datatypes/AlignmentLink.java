@@ -33,6 +33,11 @@ public class AlignmentLink implements Writable {
 		sourcePosition = -1;
 		targetPosition = -1;
 	}
+	
+	public AlignmentLink(AlignmentLink other) {
+		sourcePosition = other.sourcePosition;
+		targetPosition = other.targetPosition;
+	}
 
 	public AlignmentLink(int srcPos, int trgPos) {
 		sourcePosition = srcPos;

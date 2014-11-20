@@ -38,14 +38,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 import org.apache.commons.lang.time.StopWatch;
-import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.util.StringUtils;
-import org.apache.hadoop.util.Tool;
-import org.apache.hadoop.util.ToolRunner;
 
+import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.util.CLI;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
 
 /**
@@ -53,10 +50,10 @@ import com.beust.jcommander.ParameterException;
  * @author Aurelien Waite
  * @date 28 May 2014
  */
-public class TTableServer extends Configured implements Closeable, Tool {
+public class TTableServer implements Closeable {
 
 	final static int BUFFER_SIZE = 65536;
-	
+
 	private static final String GENRE = "$GENRE";
 
 	private static final String DIRECTION = "$DIRECTION";
@@ -159,7 +156,6 @@ public class TTableServer extends Configured implements Closeable, Tool {
 		}
 	}
 
-
 	private ServerSocket serverSocket;
 
 	private Map<Byte, Map<Integer, Map<Integer, Double>>> model = new HashMap<>();
@@ -224,8 +220,8 @@ public class TTableServer extends Configured implements Closeable, Tool {
 		}
 	}
 
-	private void setup(CLI.TTableServerParameters params) 
-			throws IOException, InterruptedException {
+	private void setup(CLI.TTableServerParameters params) throws IOException,
+			InterruptedException {
 		boolean source2Target;
 		if (params.ttableDirection.equals("s2t")) {
 			source2Target = true;
@@ -234,12 +230,13 @@ public class TTableServer extends Configured implements Closeable, Tool {
 		} else {
 			throw new RuntimeException("Unknown direction: "
 					+ params.ttableDirection);
-		}		
+		}
 		int serverPort;
 		if (source2Target) {
 			serverPort = params.sp.ttableS2TServerPort;
 		} else {
-			serverPort = params.sp.ttableT2SServerPort;;
+			serverPort = params.sp.ttableT2SServerPort;
+			;
 		}
 		minLexProb = params.minLexProb;
 		serverSocket = new ServerSocket(serverPort);
@@ -269,31 +266,22 @@ public class TTableServer extends Configured implements Closeable, Tool {
 		threadPool.shutdown();
 	}
 
-	public int run(String[] args) throws IllegalArgumentException,
+	public static int main(String[] args) throws IllegalArgumentException,
 			IllegalAccessException, IOException, InterruptedException {
 		CLI.TTableServerParameters params = new CLI.TTableServerParameters();
-		JCommander cmd = new JCommander(params);
-
 		try {
-			cmd.parse(args);
-
-			try (TTableServer server = new TTableServer()) {
-				server.setup(params);
-				server.startServer();
-				System.err.println("TTable server ready on port: "
-						+ server.serverSocket.getLocalPort());
-				Thread.sleep(24 * 60 * 60 * 1000); // Sleep for 24 hours
-			}
+			Util.parseCommandLine(args, params);
 		} catch (ParameterException e) {
-			System.err.println(e.getMessage());
-			cmd.usage();
+			return 1;
 		}
-
-		return 1;
+		try (TTableServer server = new TTableServer()) {
+			server.setup(params);
+			server.startServer();
+			System.err.println("TTable server ready on port: "
+					+ server.serverSocket.getLocalPort());
+			Thread.sleep(24 * 60 * 60 * 1000); // Sleep for 24 hours
+		}
+		return 0;
 	}
 
-	public static void main(String[] args) throws Exception {
-		int res = ToolRunner.run(new TTableServer(), args);
-		System.exit(res);
-	}
 }

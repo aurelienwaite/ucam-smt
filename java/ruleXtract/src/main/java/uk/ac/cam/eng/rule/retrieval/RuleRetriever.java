@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -39,7 +40,6 @@ import java.util.zip.GZIPOutputStream;
 
 import org.apache.commons.lang.time.StopWatch;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
@@ -50,17 +50,14 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
-import org.apache.hadoop.util.Tool;
-import org.apache.hadoop.util.ToolRunner;
 
 import uk.ac.cam.eng.extraction.datatypes.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
+import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
-import uk.ac.cam.eng.rulebuilding.features.EnumRuleType;
 import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.Pair;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
 
 /**
@@ -75,7 +72,7 @@ import com.beust.jcommander.ParameterException;
  *       format, which results in much smaller HFiles and faster access 3)
  *       Multithreaded access to HFile partitions.
  */
-public class RuleRetriever extends Configured implements Tool {
+public class RuleRetriever {
 
 	private BloomFilter[] bfs;
 
@@ -96,14 +93,16 @@ public class RuleRetriever extends Configured implements Tool {
 	Set<Text> foundTestVocab = new HashSet<>();
 
 	private int maxSourcePhrase;
-	
+
 	FeatureRegistry fReg;
 
 	private void setup(String testFile, CLI.RuleRetrieverParameters params)
 			throws FileNotFoundException, IOException {
-		fReg = new FeatureRegistry(params.features.features, params.provenance.provenance);
+		fReg = new FeatureRegistry(params.features.features,
+				params.rp.prov.provenance);
 		passThroughRulesFileName = params.passThroughRules;
 		filter = new RuleFilter(params.fp, fReg);
+		maxSourcePhrase = params.rp.maxSourcePhrase;
 		passThroughRules = getPassThroughRules();
 		Set<Text> fullTestVocab = getTestVocab(testFile);
 		Set<Text> passThroughVocab = getPassThroughVocab();
@@ -115,8 +114,7 @@ public class RuleRetriever extends Configured implements Tool {
 		}
 	}
 
-	private void loadDir(String dirString)
-			throws IOException {
+	private void loadDir(String dirString) throws IOException {
 		File dir = new File(dirString);
 		Configuration conf = new Configuration();
 		CacheConfig cacheConf = new CacheConfig(conf);
@@ -159,8 +157,9 @@ public class RuleRetriever extends Configured implements Tool {
 					String[] sourceString = matcher.group(1).split(" ");
 					String[] targetString = matcher.group(2).split(" ");
 					if (sourceString.length != targetString.length) {
-						System.err.println("Malformed pass through rules file: "
-								+ passThroughRulesFileName);
+						System.err
+								.println("Malformed pass through rules file: "
+										+ passThroughRulesFileName);
 						System.exit(1);
 					}
 					List<Integer> source = new ArrayList<Integer>();
@@ -206,8 +205,9 @@ public class RuleRetriever extends Configured implements Tool {
 						res.add(new Text(sourceString[0]));
 					}
 				} else {
-					System.err.println("Malformed pass through rules constraint file: "
-							+ passThroughRulesFileName);
+					System.err
+							.println("Malformed pass through rules constraint file: "
+									+ passThroughRulesFileName);
 					System.exit(1);
 				}
 			}
@@ -236,23 +236,28 @@ public class RuleRetriever extends Configured implements Tool {
 		sideGlueRule1.add(-4);
 		sideGlueRule1.add(-1);
 		Rule glueRule1 = new Rule(-4, sideGlueRule1, sideGlueRule1);
-		res.add(Pair.createPair(new RuleWritable(glueRule1), fReg.getDefaultGlueFeatures()));
+		res.add(Pair.createPair(new RuleWritable(glueRule1),
+				fReg.getDefaultGlueFeatures()));
 		List<Integer> sideGlueRule2 = new ArrayList<Integer>();
 		sideGlueRule2.add(-1);
 		Rule glueRule2 = new Rule(-1, sideGlueRule2, sideGlueRule2);
-		res.add(Pair.createPair(new RuleWritable(glueRule2), fReg.getDefaultGlueFeatures()));
+		res.add(Pair.createPair(new RuleWritable(glueRule2),
+				new TreeMap<Integer,Double>()));
 		List<Integer> sideGlueRule3 = new ArrayList<>();
 		sideGlueRule3.add(-1);
 		Rule glueRule3 = new Rule(-4, sideGlueRule3, sideGlueRule3);
-		res.add(Pair.createPair(new RuleWritable(glueRule3), fReg.getDefaultGlueFeatures()));
+		res.add(Pair.createPair(new RuleWritable(glueRule3),
+				new TreeMap<Integer,Double>()));
 		List<Integer> startSentenceSide = new ArrayList<Integer>();
 		startSentenceSide.add(1);
 		Rule startSentence = new Rule(-1, startSentenceSide, startSentenceSide);
-		res.add(Pair.createPair(new RuleWritable(startSentence), fReg.getDefaultGlueStartOrEndFeatures()));
+		res.add(Pair.createPair(new RuleWritable(startSentence),
+				fReg.getDefaultGlueStartOrEndFeatures()));
 		List<Integer> endSentenceSide = new ArrayList<Integer>();
 		endSentenceSide.add(2);
 		Rule endSentence = new Rule(-1, endSentenceSide, endSentenceSide);
-		res.add(Pair.createPair(new RuleWritable(endSentence), fReg.getDefaultGlueStartOrEndFeatures()));
+		res.add(Pair.createPair(new RuleWritable(endSentence),
+				fReg.getDefaultGlueStartOrEndFeatures()));
 		return res;
 	}
 
@@ -293,16 +298,15 @@ public class RuleRetriever extends Configured implements Tool {
 		}
 		return queries;
 	}
-	
-	
-	public void writeRule(RuleWritable rule, SortedMap<Integer, Double> processedFeatures,
-			BufferedWriter out) {
+
+	public static void writeRule(RuleWritable rule,
+			SortedMap<Integer, Double> processedFeatures, BufferedWriter out) {
 		StringBuilder res = new StringBuilder();
 		res.append(rule);
 		for (int featureIndex : processedFeatures.keySet()) {
 			double featureValue = processedFeatures.get(featureIndex);
 			// one-based index
-			int index = featureIndex + 1;
+			int index = featureIndex;
 			if (Math.floor(featureValue) == featureValue) {
 				int featureValueInt = (int) featureValue;
 				res.append(String.format(" %d@%d", featureValueInt, index));
@@ -329,16 +333,14 @@ public class RuleRetriever extends Configured implements Tool {
 	 * @throws IllegalAccessException
 	 * @throws IllegalArgumentException
 	 */
-	public int run(String[] args) throws FileNotFoundException, IOException,
-			InterruptedException, IllegalArgumentException,
+	public static void main(String[] args) throws FileNotFoundException,
+			IOException, InterruptedException, IllegalArgumentException,
 			IllegalAccessException {
 		CLI.RuleRetrieverParameters params = new CLI.RuleRetrieverParameters();
-		JCommander cmd = new JCommander(params);
 		try {
-			cmd.parse(args);
+			Util.parseCommandLine(args, params);
 		} catch (ParameterException e) {
-			System.err.println(e.getMessage());
-			cmd.usage();
+			return;
 		}
 		RuleRetriever retriever = new RuleRetriever();
 		retriever.loadDir(params.hfile);
@@ -353,12 +355,13 @@ public class RuleRetriever extends Configured implements Tool {
 		System.err.println("Executing queries");
 		try (BufferedWriter out = new BufferedWriter(new OutputStreamWriter(
 				new GZIPOutputStream(new FileOutputStream(params.rules))))) {
-			ExecutorService threadPool = Executors.newFixedThreadPool(params.retrievalThreads);
+			ExecutorService threadPool = Executors
+					.newFixedThreadPool(params.retrievalThreads);
 
 			for (int i = 0; i < queries.size(); ++i) {
 				HFileRuleQuery query = new HFileRuleQuery(retriever.readers[i],
-						retriever.bfs[i], out, queries.get(i),
-						retriever, params.sp);
+						retriever.bfs[i], out, queries.get(i), retriever,
+						params.sp);
 				threadPool.execute(query);
 			}
 			threadPool.shutdown();
@@ -367,7 +370,8 @@ public class RuleRetriever extends Configured implements Tool {
 			for (RuleWritable passThroughRule : retriever.passThroughRules) {
 				if (!retriever.foundPassThroughRules.contains(passThroughRule)) {
 					writeRule(passThroughRule,
-							fReg.getDefaultPassThroughRuleFeatures(), out);
+							retriever.fReg.getDefaultPassThroughRuleFeatures(),
+							out);
 				}
 			}
 			// Add Deletetion and OOV rules
@@ -380,31 +384,26 @@ public class RuleRetriever extends Configured implements Tool {
 					EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs()));
 			oovRuleWritable.setTarget(new Text(""));
 			for (Text source : retriever.testVocab) {
-				//Write deletion rule
+				// Write deletion rule
 				if (retriever.foundTestVocab.contains(source)) {
 					deletionRuleWritable.setSource(source);
 					writeRule(deletionRuleWritable,
-							fReg.getDefaultDeletionFeatures(), out);
-				//Otherwise is an OOV
+							retriever.fReg.getDefaultDeletionFeatures(), out);
+					// Otherwise is an OOV
 				} else {
 					oovRuleWritable.setSource(source);
 					writeRule(oovRuleWritable,
-							fReg.getDefaultOOVFeatures(), out);
+							retriever.fReg.getDefaultOOVFeatures(), out);
 				}
 			}
 			// Glue rules
-			for (Pair<RuleWritable, SortedMap<Integer, Double>> glueRule : retriever.getGlueRules()) {
+			for (Pair<RuleWritable, SortedMap<Integer, Double>> glueRule : retriever
+					.getGlueRules()) {
 				writeRule(glueRule.getFirst(), glueRule.getSecond(), out);
 			}
 		}
 		System.out.println(retriever.foundPassThroughRules);
 		System.out.println(retriever.foundTestVocab);
-
-		return 0;
 	}
 
-	public static void main(String[] args) throws Exception {
-		int res = ToolRunner.run(new RuleRetriever(), args);
-		System.exit(res);
-	}
 }

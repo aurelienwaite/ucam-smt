@@ -44,7 +44,7 @@ public final class FeatureFunctionRegistry {
 			this.requested = requested;
 			this.fReg = fReg;
 			return this;
-		}
+		} 
 
 	}
 	
@@ -70,7 +70,7 @@ public final class FeatureFunctionRegistry {
 		BiFunction<Rule, FeatureFunctionInputData, double[]> f
 			= featureFunctions.get(feature);
 		if (f == null) {
-			return fReg.getEmpty(feature);
+			return null;
 		}
 		return f.apply(new Rule(rule), ffInput.get().build(data, feature, fReg));
 	}

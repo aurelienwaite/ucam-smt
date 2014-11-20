@@ -31,9 +31,9 @@ import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ExtractedData;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
 import uk.ac.cam.eng.extraction.hadoop.util.SimpleHFileOutputFormat;
@@ -41,7 +41,6 @@ import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.Pair;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
 
 /**
@@ -51,31 +50,28 @@ import com.beust.jcommander.ParameterException;
  */
 public class MergeJob extends Configured implements Tool {
 
-	private static class MergeFeatureMapper
-			extends
+	private static class MergeFeatureMapper extends
 			Mapper<RuleWritable, FeatureMap, RuleWritable, RuleData> {
 
 		private RuleData ruleData = new RuleData();
 
 		@Override
-		protected void map(RuleWritable key, FeatureMap value,
-				Context context) throws IOException, InterruptedException {
+		protected void map(RuleWritable key, FeatureMap value, Context context)
+				throws IOException, InterruptedException {
 			ruleData.setFeatures(value);
 			context.write(key, ruleData);
 		}
 
 	}
-	
-	private static class MergeRuleMapper
-			extends
+
+	private static class MergeRuleMapper extends
 			Mapper<RuleWritable, ExtractedData, RuleWritable, RuleData> {
 
 		private RuleData ruleData = new RuleData();
 
 		@Override
 		protected void map(RuleWritable key, ExtractedData value,
-				Context context)
-				throws IOException, InterruptedException {
+				Context context) throws IOException, InterruptedException {
 			ruleData.setProvCounts(value.getProvenanceCountMap());
 			ruleData.setAlignments(value.getAlignmentCountMapWritable());
 			context.write(key, ruleData);
@@ -88,8 +84,7 @@ public class MergeJob extends Configured implements Tool {
 		private RuleData ruleData = new RuleData();
 
 		@Override
-		protected void reduce(RuleWritable key,
-				Iterable<RuleData> values,
+		protected void reduce(RuleWritable key, Iterable<RuleData> values,
 				Context context) throws IOException, InterruptedException {
 			ruleData.clear();
 			for (RuleData value : values) {
@@ -107,8 +102,7 @@ public class MergeJob extends Configured implements Tool {
 		private Text source = new Text();
 
 		@Override
-		protected void reduce(RuleWritable key,
-				Iterable<RuleData> values,
+		protected void reduce(RuleWritable key, Iterable<RuleData> values,
 				Context context) throws IOException, InterruptedException {
 			// First rule!
 			if (source.getLength() == 0) {
@@ -123,8 +117,7 @@ public class MergeJob extends Configured implements Tool {
 			for (RuleData value : values) {
 				ruleData.merge(value);
 			}
-			list.add(Pair.createPair(new Text(key.getTarget()),
-					ruleData));
+			list.add(Pair.createPair(new Text(key.getTarget()), ruleData));
 		}
 
 		@Override
@@ -160,32 +153,27 @@ public class MergeJob extends Configured implements Tool {
 			IllegalAccessException, IOException, ClassNotFoundException,
 			InterruptedException {
 		CLI.MergeJobParameters params = new CLI.MergeJobParameters();
-		JCommander cmd = new JCommander(params);
-
 		try {
-			cmd.parse(args);
-			Configuration conf = getConf();
-			Util.ApplyConf(cmd, conf);
-			Job job = getJob(conf);
-			
-			String[] featurePathNames = params.inputFeatures.split(",");
-			Path[] featurePaths = StringUtils.stringToPath(featurePathNames);
-			for (Path featurePath : featurePaths) {
-				MultipleInputs.addInputPath(job, featurePath, SequenceFileInputFormat.class, MergeFeatureMapper.class);
-			}
-			Path rulePath = new Path(params.inputRules);
-			MultipleInputs.addInputPath(job, rulePath,
-					SequenceFileInputFormat.class, MergeRuleMapper.class);
-
-			FileOutputFormat.setOutputPath(job, new Path(params.output));
-			
-			return job.waitForCompletion(true) ? 0 : 1;
+			Util.parseCommandLine(args, params);
 		} catch (ParameterException e) {
-			System.err.println(e.getMessage());
-			cmd.usage();
+			return 1;
 		}
+		Configuration conf = getConf();
+		Util.ApplyConf(params, conf);
+		Job job = getJob(conf);
 
-		return 1;
+		String[] featurePathNames = params.inputFeatures.split(",");
+		Path[] featurePaths = StringUtils.stringToPath(featurePathNames);
+		for (Path featurePath : featurePaths) {
+			MultipleInputs.addInputPath(job, featurePath,
+					SequenceFileInputFormat.class, MergeFeatureMapper.class);
+		}
+		Path rulePath = new Path(params.inputRules);
+		MultipleInputs.addInputPath(job, rulePath,
+				SequenceFileInputFormat.class, MergeRuleMapper.class);
+
+		FileOutputFormat.setOutputPath(job, new Path(params.output));
+		return job.waitForCompletion(true) ? 0 : 1;
 	}
 
 	public static void main(String[] args) throws Exception {

@@ -39,12 +39,22 @@ public class AlignmentWritable extends ArrayWritable {
 	}
 
 	public AlignmentWritable(List<AlignmentLink> alignment) {
-		super(AlignmentLink.class);
+		this();
 		AlignmentLink[] links = new AlignmentLink[alignment.size()];
 		alignment.toArray(links);
 		this.set(links);
 	}
 
+	public AlignmentWritable(AlignmentWritable other){
+		this();
+		Writable[] otherLinks =  other.get();
+		AlignmentLink[] links = new AlignmentLink[otherLinks.length];
+		for(int i=0;i<links.length;++i){
+			links[i] = new AlignmentLink((AlignmentLink)otherLinks[i]);
+		}
+		this.set(links);
+	}
+	
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj) {

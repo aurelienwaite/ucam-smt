@@ -37,7 +37,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import uk.ac.cam.eng.extraction.datatypes.Rule;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceProbMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceCountMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
@@ -225,7 +225,7 @@ public class TestFeatureComputation {
 		try (SequenceFile.Reader reader = new SequenceFile.Reader(
 				FileSystem.get(conf), new Path("s2t/part-r-00000"), conf)) {
 			RuleWritable key = new RuleWritable();
-			FeatureMap value = new FeatureMap();
+			ProvenanceProbMap value = new ProvenanceProbMap();
 			// Test that the 9970 record is computed correctly
 			for (int i = 0; i < 9971; ++i) {
 				reader.next(key, value);
@@ -250,7 +250,7 @@ public class TestFeatureComputation {
 		try (SequenceFile.Reader reader = new SequenceFile.Reader(
 				FileSystem.get(conf), new Path("t2s/part-r-00000"), conf)) {
 			RuleWritable key = new RuleWritable();
-			FeatureMap value = new FeatureMap();
+			ProvenanceProbMap value = new ProvenanceProbMap();
 			// Picking entry 9569 as it has lots of features
 			for (int i = 0; i < 9570; ++i) {
 				reader.next(key, value);
@@ -301,7 +301,7 @@ public class TestFeatureComputation {
 					++count;
 					rule.setTarget(entry.getFirst());
 					if (count == 2180) {
-						FeatureMap features = entry.getSecond().getFeatures();
+						ProvenanceProbMap features = entry.getSecond().getFeatures().get(null);
 						Assert.assertEquals(0.25, features.get(0).get(), DELTA);
 						Assert.assertEquals(3d, features.get(1).get(), DELTA);
 						Assert.assertEquals(0.04918032786885246,

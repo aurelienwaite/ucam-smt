@@ -2,6 +2,7 @@ package uk.ac.cam.eng.rule.features;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.TreeMap;
 import org.apache.hadoop.io.IntWritable;
 
 import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceProbMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.IntWritableCache;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
@@ -18,19 +20,21 @@ import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 public class FeatureRegistry {
 
 	// Used for provenance features which don't have a probability
-	private final static double DEFAULT_PHRASE_LOG_PROB = -4.7;
+	private final static double DEFAULT_S2T_PHRASE_LOG_PROB = -4.7;
 
+	private final static double DEFAULT_T2S_PHRASE_LOG_PROB = -7;
+	
 	private final static double DEFAULT_LEX_VALUE = -40;
 
-	private final List<Feature> allFeatures = new ArrayList<>();
+	private final List<Feature> allFeatures;
 
 	private final Map<Feature, int[]> indexMappings = new HashMap<>();
 
 	private final int noOfProvs;
 
-	private final double[] emptyNonProv = new double[] { 0 };
+	private final double[] zeroNonProv = new double[] { 0 };
 
-	private final double[] emptyProv;
+	private final double[] zeroProv;
 
 	private final SortedMap<Integer, Double> defaultFeatures;
 
@@ -44,14 +48,18 @@ public class FeatureRegistry {
 
 	private final SortedMap<Integer, Double> defaultGlueStartOrEndFeatures;
 
+	private final boolean hasLexicalFeatures;
+
 	public FeatureRegistry(String featureString, String provenanceString) {
 		String[] featureSplit = featureString.split(",");
 		noOfProvs = provenanceString.split(",").length;
 		List<Feature> features = new ArrayList<>();
 		int indexCounter = 1; // 1-based
+		boolean lexFeatures = false;
 		for (String fString : featureSplit) {
 			int[] mappings;
 			Feature f = Feature.findFromConf(fString);
+			lexFeatures |= Feature.ComputeLocation.LEXICAL_SERVER == f.computed;
 			features.add(f);
 			if (Feature.Scope.PROVENANCE == f.scope) {
 				mappings = new int[noOfProvs];
@@ -63,8 +71,10 @@ public class FeatureRegistry {
 			}
 			indexMappings.put(f, mappings);
 		}
-		emptyProv = new double[noOfProvs];
-		Arrays.fill(emptyProv, 0.0);
+		allFeatures = Collections.unmodifiableList(features);
+		zeroProv = new double[noOfProvs];
+		hasLexicalFeatures = lexFeatures;
+		Arrays.fill(zeroProv, 0.0);
 		defaultFeatures = createDefaultData();
 		defaultOOVFeatures = createOOVDefaultData();
 		defaultPassThroughFeatures = createPassThroughDefaultData();
@@ -121,11 +131,11 @@ public class FeatureRegistry {
 	 * @param f
 	 * @return An array of zeros
 	 */
-	public double[] getEmpty(Feature f) {
+	public double[] getZeros(Feature f) {
 		if (Feature.Scope.PROVENANCE == f.scope) {
-			return emptyProv;
+			return zeroProv;
 		} else {
-			return emptyNonProv;
+			return zeroNonProv;
 		}
 	}
 
@@ -148,9 +158,9 @@ public class FeatureRegistry {
 		// Provenance phrase probabilities need default values
 		SortedMap<Integer, Double> defaultFeatures = new TreeMap<Integer, Double>();
 		addDefault(Feature.PROVENANCE_SOURCE2TARGET_PROBABILITY,
-				defaultFeatures, DEFAULT_PHRASE_LOG_PROB);
+				defaultFeatures, DEFAULT_S2T_PHRASE_LOG_PROB);
 		addDefault(Feature.PROVENANCE_TARGET2SOURCE_PROBABILITY,
-				defaultFeatures, DEFAULT_PHRASE_LOG_PROB);
+				defaultFeatures, DEFAULT_T2S_PHRASE_LOG_PROB);
 		addDefault(Feature.RULE_INSERTION_PENALTY, defaultFeatures, 1d);
 		return defaultFeatures;
 	}
@@ -163,13 +173,13 @@ public class FeatureRegistry {
 	private SortedMap<Integer, Double> createPassThroughDefaultData() {
 		// We need to add default values for lexical probs
 		SortedMap<Integer, Double> defaultFeatures = new TreeMap<Integer, Double>();
-		addDefault(Feature.SOURCE_2_TARGET_LEXICAL_PROBABILITY,
+		addDefault(Feature.SOURCE2TARGET_LEXICAL_PROBABILITY, defaultFeatures,
+				DEFAULT_LEX_VALUE);
+		addDefault(Feature.TARGET2SOURCE_LEXICAL_PROBABILITY, defaultFeatures,
+				DEFAULT_LEX_VALUE);
+		addDefault(Feature.PROVENANCE_SOURCE2TARGET_LEXICAL_PROBABILITY,
 				defaultFeatures, DEFAULT_LEX_VALUE);
-		addDefault(Feature.TARGET_2_SOURCE_LEXICAL_PROBABILITY,
-				defaultFeatures, DEFAULT_LEX_VALUE);
-		addDefault(Feature.PROVENANCE_SOURCE_2_TARGET_LEXICAL_PROBABILITY,
-				defaultFeatures, DEFAULT_LEX_VALUE);
-		addDefault(Feature.PROVENANCE_TARGET_2_SOURCE_LEXICAL_PROBABILITY,
+		addDefault(Feature.PROVENANCE_TARGET2SOURCE_LEXICAL_PROBABILITY,
 				defaultFeatures, DEFAULT_LEX_VALUE);
 		return defaultFeatures;
 	}
@@ -207,7 +217,7 @@ public class FeatureRegistry {
 	public SortedMap<Integer, Double> getDefaultOOVFeatures() {
 		return new TreeMap<Integer, Double>(defaultOOVFeatures);
 	}
-	
+
 	public SortedMap<Integer, Double> getDefaultDeletionFeatures() {
 		return new TreeMap<Integer, Double>(defaultDeletionFeatures);
 	}
@@ -215,18 +225,27 @@ public class FeatureRegistry {
 	public SortedMap<Integer, Double> getDefaultGlueFeatures() {
 		return new TreeMap<Integer, Double>(defaultGlueFeatures);
 	}
-	
+
 	public SortedMap<Integer, Double> getDefaultGlueStartOrEndFeatures() {
 		return new TreeMap<Integer, Double>(defaultGlueStartOrEndFeatures);
 	}
-	
+
 	public SortedMap<Integer, Double> getDefaultPassThroughRuleFeatures() {
 		return new TreeMap<Integer, Double>(defaultPassThroughFeatures);
 	}
 
+	private static final ProvenanceProbMap checkedGetProbs(Feature f,
+			FeatureMap features) {
+		ProvenanceProbMap probs = features.get(f);
+		if (probs == null) {
+			throw new RuntimeException("No data for feature " + f.getConfName());
+		}
+		return probs;
+	}
+
 	/**
-	 * If we find a pass through rule in the data then we use its lexical features but nothing else.
-	 * Slightly crazy!
+	 * If we find a pass through rule in the data then we use its lexical
+	 * features but nothing else. Slightly crazy!
 	 * 
 	 * @param features
 	 * @param defaults
@@ -240,13 +259,15 @@ public class FeatureRegistry {
 				.filter((f) -> Feature.ComputeLocation.LEXICAL_SERVER == f.computed)
 				.forEach(
 						(f) -> {
-							int[] indexMappings = getFeatureIndices(f);
-							for (int index : indexMappings) {
+							int[] mappings = indexMappings.get(f);
+							ProvenanceProbMap probs = checkedGetProbs(f,
+									features);
+							for (int index : mappings) {
 								IntWritable indexIntW = IntWritableCache
 										.createIntWritable(index);
 								double ffVal = 0.0;
-								if (features.containsKey(indexIntW)) {
-									ffVal = features.get(indexIntW).get();
+								if (probs.containsKey(indexIntW)) {
+									ffVal = probs.get(indexIntW).get();
 								}
 								if (ffVal != 0.0) {
 									defaults.put(index, ffVal);
@@ -256,31 +277,51 @@ public class FeatureRegistry {
 		return defaults;
 	}
 
+	private static void setVal(int mapping, double val,
+			SortedMap<Integer, Double> features) {
+		// Default val in sparse tuple arc is 0. Delete default val.
+		if (val == 0.0) {
+			features.remove(mapping);
+		} else {
+			features.put(mapping, val);
+		}
+	}
+
 	public SortedMap<Integer, Double> processFeatures(RuleWritable rule,
 			RuleData data) {
 		SortedMap<Integer, Double> processedFeatures = getDefaultFeatures();
-		FeatureMap features = data.getFeatures();
 		for (Feature f : allFeatures) {
-			int[] indexMappings = getFeatureIndices(f);
+			int[] mappings = indexMappings.get(f);
 			if (Feature.ComputeLocation.RETRIEVAL == f.computed) {
 				double[] results = FeatureFunctionRegistry.computeFeature(f,
 						rule, data, this);
+				if(results == null){
+					continue;
+				}
 				for (int i = 0; i < results.length; ++i) {
-					if (results[i] != 0.0) {
-						processedFeatures.put(indexMappings[i], results[i]);
-					}
+					setVal(mappings[i], results[i], processedFeatures);
 				}
 			} else {
-				for (int index : indexMappings) {
-					double ffVal = features.get(
-							IntWritableCache.createIntWritable(index)).get();
-					if (ffVal != 0.0) {
-						processedFeatures.put(index, ffVal);
+				ProvenanceProbMap probs = checkedGetProbs(f, data.getFeatures());
+				for (int i = 0; i < mappings.length; ++i) {
+					//Provenances are 1-indexed with the 0th element reserved for the global
+					//scope.
+					int index= Feature.Scope.PROVENANCE == f.scope ? i+1 : i;
+					if (probs
+							.containsKey(IntWritableCache.createIntWritable(index))) {
+						double ffVal = probs
+								.get(IntWritableCache
+										.createIntWritable(index)).get();
+						setVal(mappings[i], ffVal, processedFeatures);
 					}
 				}
 			}
 		}
 		return processedFeatures;
+	}
+
+	public boolean hasLexicalFeatures() {
+		return hasLexicalFeatures;
 	}
 
 }

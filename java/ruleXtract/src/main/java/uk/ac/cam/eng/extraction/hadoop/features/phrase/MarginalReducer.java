@@ -21,7 +21,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ByteWritable;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.IntWritable;
@@ -34,10 +33,9 @@ import org.apache.hadoop.mapreduce.Reducer;
 import uk.ac.cam.eng.extraction.datatypes.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceCountMap;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceProbMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.rule.features.Feature;
-import uk.ac.cam.eng.rule.features.FeatureRegistry;
-import uk.ac.cam.eng.util.CLI;
 
 /**
  * Computes marginal counts. Used for phrase based probability computation.
@@ -227,12 +225,16 @@ class MarginalReducer extends
 
 	private boolean source2Target = true;
 
-	private int[] mappings;
+	private ProvenanceProbMap provProbs = new ProvenanceProbMap();
+	
+	private ProvenanceProbMap globalProb = new ProvenanceProbMap();
 
+	private Feature globalF;
+	
+	private Feature provF;
+	
 	private FeatureMap features = new FeatureMap();
-
-	private FeatureRegistry fReg;
-
+	
 	private Text getMarginal(RuleWritable rule) {
 		if (source2Target) {
 			return rule.getSource();
@@ -245,23 +247,18 @@ class MarginalReducer extends
 	protected void setup(Context context) throws IOException,
 			InterruptedException {
 		super.setup(context);
-		Configuration conf = context.getConfiguration();
 		String s2tString = context.getConfiguration().get(SOURCE_TO_TARGET);
 		if (s2tString == null) {
 			throw new RuntimeException("Need to set configuration value "
 					+ SOURCE_TO_TARGET);
 		}
 		source2Target = Boolean.valueOf(s2tString);
-		fReg = new FeatureRegistry(conf.get(CLI.Features.FEATURES),
-				conf.get(CLI.Provenance.PROV));
 		if (source2Target) {
-			mappings = fReg.getFeatureIndices(
-					Feature.SOURCE2TARGET_PROBABILITY,
-					Feature.PROVENANCE_SOURCE2TARGET_PROBABILITY);
+					globalF = Feature.SOURCE2TARGET_PROBABILITY;
+					provF = Feature.PROVENANCE_SOURCE2TARGET_PROBABILITY;
 		} else {
-			mappings = fReg.getFeatureIndices(
-					Feature.TARGET2SOURCE_PROBABILITY,
-					Feature.PROVENANCE_TARGET2SOURCE_PROBABILITY);
+					globalF = Feature.TARGET2SOURCE_PROBABILITY;
+					provF = Feature.PROVENANCE_TARGET2SOURCE_PROBABILITY;
 		}
 	}
 
@@ -269,13 +266,22 @@ class MarginalReducer extends
 			ProvenanceCountMap totals, Context context) throws IOException,
 			InterruptedException {
 		for (RuleCount rw : rules) {
+			provProbs.clear();
+			globalProb.clear();
 			features.clear();
 			for (Entry<ByteWritable, IntWritable> entry : rw.counts.entrySet()) {
 				double probability = (double) entry.getValue().get()
 						/ (double) totals.get(entry.getKey()).get();
-				int featureIndex = mappings[(int) entry.getKey().get()];
-				features.put(featureIndex, Math.log(probability));			
+				int key = (int) entry.getKey().get();
+				if(key==0){
+					globalProb.put(key, Math.log(probability));
+				}
+				else{
+					provProbs.put(key, Math.log(probability));	
+				}
 			}
+			features.put(globalF, globalProb);
+			features.put(provF, provProbs);
 			RuleWritable outKey = rw.rule;
 			if (!source2Target) {
 				Rule r = new Rule(outKey);

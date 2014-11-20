@@ -24,6 +24,9 @@ import java.lang.reflect.Field;
 import org.apache.hadoop.conf.Configuration;
 
 import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import com.beust.jcommander.ParameterException;
+import com.beust.jcommander.ParametersDelegate;
 
 /**
  * Set of utilities. Static methods.
@@ -39,8 +42,9 @@ public final class Util {
 	}
 
 	/**
-	 * Private recursive helper function to set properties based on JCommander 
+	 * Private recursive helper function to set properties based on JCommander
 	 * parameter objects
+	 * 
 	 * @param params
 	 * @param conf
 	 * @throws IllegalArgumentException
@@ -49,30 +53,45 @@ public final class Util {
 	private static void setProps(Object params, Configuration conf)
 			throws IllegalArgumentException, IllegalAccessException {
 		for (Field field : params.getClass().getDeclaredFields()) {
-			String name = field.getName();
-			Class<?> clazz = field.getType();
-			Object val = field.get(params);
-			if (Integer.class == clazz){
-				conf.setInt(name, (Integer) val);
-			}else if(Boolean.class == clazz){
-				conf.setBoolean(name, (Boolean)val);
-			}else if (String.class == clazz){
-				conf.set(name, (String) val);
-			}else{
-				setProps(val, conf);
+			Parameter paramAnnotation = field.getAnnotation(Parameter.class);
+			if (paramAnnotation != null) {
+				// Use the first name only in annotation
+				String name = paramAnnotation.names()[0];
+				Object val = field.get(params);
+				if(val == null){
+					throw new RuntimeException("Null value for " + name);
+				}
+				Class<?> clazz = val.getClass();
+				if (Integer.class == clazz) {
+					conf.setInt(name, (Integer) val);
+				} else if (Boolean.class == clazz) {
+					conf.setBoolean(name, (Boolean) val);
+				} else if (String.class == clazz) {
+					conf.set(name, (String) val);
+				}
+			} else if (field.getAnnotation(ParametersDelegate.class) != null) {
+				setProps(field.get(params), conf);
 			}
 		}
 	}
 
-	public static void ApplyConf(JCommander cmd, Configuration conf)
-			throws IllegalArgumentException, IllegalAccessException {
-		Object params = cmd.getObjects().get(0);
-		ApplyConf(params, conf);
-	}
-	
 	public static void ApplyConf(Object params, Configuration conf)
 			throws IllegalArgumentException, IllegalAccessException {
 		setProps(params, conf);
+	}
+
+	public static JCommander parseCommandLine(String[] args, Object params) {
+		JCommander cmd = new JCommander();
+		cmd.setAcceptUnknownOptions(true);
+		cmd.addObject(params);
+		try {
+			cmd.parse(args);
+		} catch (ParameterException e) {
+			System.err.println(e.getMessage());
+			cmd.usage();
+			throw e;
+		}
+		return cmd;
 	}
 
 }

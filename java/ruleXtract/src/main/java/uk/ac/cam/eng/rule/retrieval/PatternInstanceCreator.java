@@ -55,7 +55,7 @@ class PatternInstanceCreator {
 		maxSourcePhrase = params.rp.maxSourcePhrase;
 		maxSourceElements = params.rp.maxSourceElements;
 		maxTerminalLength = params.rp.maxTerminalLength;
-		maxNonTerminalSpan = params.rp.maxNonterminalSpan;
+		maxNonTerminalSpan = params.rp.maxNonTerminalSpan;
 		hrMaxHeight = params.hr_max_height;
 		this.sidePatterns = new ArrayList<>(sidePatterns);
 	}

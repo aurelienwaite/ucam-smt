@@ -46,6 +46,12 @@ public class AlignmentCountMapWritable extends
 	public AlignmentCountMapWritable() {
 
 	}
+	
+	public AlignmentCountMapWritable(AlignmentCountMapWritable other){
+		for(Entry<AlignmentWritable, Integer> entry : other.entrySet()){
+			put(new AlignmentWritable(entry.getKey()), entry.getValue());
+		}
+	}
 
 	public void increment(AlignmentCountMapWritable newCounts) {
 		for (Entry<AlignmentWritable, Integer> alignCount : newCounts
@@ -58,7 +64,7 @@ public class AlignmentCountMapWritable extends
 			}
 		}
 	}
-
+	
 	public void merge(AlignmentCountMapWritable other) {
 		int expectedSize = size() + other.size();
 		putAll(other);

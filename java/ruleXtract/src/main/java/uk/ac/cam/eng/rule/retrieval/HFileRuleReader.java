@@ -32,7 +32,6 @@ import org.apache.hadoop.io.Text;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
-import uk.ac.cam.eng.rulebuilding.features.EnumRuleType;
 import uk.ac.cam.eng.util.Pair;
 
 /**

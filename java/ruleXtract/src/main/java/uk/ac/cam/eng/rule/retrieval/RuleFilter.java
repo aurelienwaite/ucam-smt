@@ -25,24 +25,23 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.function.Consumer;
 
+import org.apache.hadoop.io.ByteWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.IntWritableCache;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.rule.features.Feature;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
@@ -61,17 +60,22 @@ class RuleFilter {
 	private static class RuleCountComparator implements
 			Comparator<Pair<RuleWritable, RuleData>> {
 
-		private final IntWritable countIndex;
+		private final ByteWritable countIndex;
 
-		public RuleCountComparator(IntWritable countIndex) {
-			this.countIndex = countIndex;
+		public RuleCountComparator(int countIndex) {
+			this.countIndex = new ByteWritable((byte) countIndex);
 		}
 
 		public int compare(Pair<RuleWritable, RuleData> a,
 				Pair<RuleWritable, RuleData> b) {
+			int aValue = a.getSecond().getProvCounts().containsKey(countIndex) ? a
+					.getSecond().getProvCounts().get(countIndex).get()
+					: 0;
+			int bValue = b.getSecond().getProvCounts().containsKey(countIndex) ? b
+					.getSecond().getProvCounts().get(countIndex).get()
+					: 0;
 			// We want descending order!
-			int countDiff = b.getSecond().getProvCounts().get(countIndex)
-					.compareTo(a.getSecond().getProvCounts().get(countIndex));
+			int countDiff = bValue < aValue ? -1 : (bValue == aValue ? 0 : 1);
 			if (countDiff != 0) {
 				return countDiff;
 			} else {
@@ -92,49 +96,25 @@ class RuleFilter {
 		}
 	}
 
-	// TODO put the default in the code
-	private double minSource2TargetPhrase;
-	private double minTarget2SourcePhrase;
-	private double minSource2TargetRule;
-	private double minTarget2SourceRule;
+	final private double minSource2TargetPhraseLog;
+	final private double minTarget2SourcePhraseLog;
+	final private double minSource2TargetRuleLog;
+	final private double minTarget2SourceRuleLog;
 	// allowed patterns
 	private Set<RulePattern> allowedPatterns = new HashSet<RulePattern>();
-	private Map<SidePattern, SourcePhraseConstraint> sourcePatternConstraints = new HashMap<>();
-	// decides whether to keep all the rules that fall within the number
-	// of translations per source threshold in case of a tie
 
-	private final int[] s2tIndices;
-	private final int[] t2sIndices;
-	// cache the comparators
-	private final RuleCountComparator[] comparators;
+	private Map<SidePattern, SourcePhraseConstraint> sourcePatternConstraints = new HashMap<>();
+
+	boolean provenanceUnion;
 
 	public RuleFilter(CLI.FilterParams params, FeatureRegistry fReg)
 			throws FileNotFoundException, IOException {
-		// when using provenance features, we can either keep the rules coming
-		// from the main table and add features corresponding to the provenance
-		// tables (default) or keep the union of the rules coming from the main
-		// and provenance tables
-		// TODO: Need prov union check here
-		if (params.provenanceUnion) {
-			s2tIndices = fReg.getFeatureIndices(
-					Feature.SOURCE2TARGET_PROBABILITY,
-					Feature.PROVENANCE_SOURCE2TARGET_PROBABILITY);
-			t2sIndices = fReg.getFeatureIndices(
-					Feature.TARGET2SOURCE_PROBABILITY,
-					Feature.PROVENANCE_TARGET2SOURCE_PROBABILITY);
-		} else {
-			s2tIndices = fReg
-					.getFeatureIndices(Feature.SOURCE2TARGET_PROBABILITY);
-			t2sIndices = fReg
-					.getFeatureIndices(Feature.TARGET2SOURCE_PROBABILITY);
-		}
-		// No of provanences + the global scope
-		comparators = new RuleCountComparator[fReg.getNoOfProvs() + 1];
-		for (int i = 0; i < comparators.length; ++i) {
-			comparators[i] = new RuleCountComparator(
-					IntWritableCache.createIntWritable(i));
-		}
-		loadConfig(params.filterConfig,
+		provenanceUnion = params.provenanceUnion;
+		minSource2TargetPhraseLog = Math.log(params.minSource2TargetPhrase);
+		minTarget2SourcePhraseLog = Math.log(params.minTarget2SourcePhrase);
+		minSource2TargetRuleLog = Math.log(params.minSource2TargetRule);
+		minTarget2SourceRuleLog = Math.log(params.minTarget2SourceRule);
+		loadConfig(params.allowedPatternsFile,
 				line -> allowedPatterns.add(RulePattern.parsePattern(line)));
 		loadConfig(params.sourcePatterns,
 				line -> {
@@ -172,41 +152,44 @@ class RuleFilter {
 		return true;
 	}
 
-	private List<Pair<RuleWritable, RuleData>> filterRulesBySource(
+	private Map<RuleWritable, RuleData> filterRulesBySource(
 			SidePattern sourcePattern,
-			SortedSet<Pair<RuleWritable, RuleData>> rules, int provMapping) {
-		List<Pair<RuleWritable, RuleData>> results = new ArrayList<>();
+			List<Pair<RuleWritable, RuleData>> rules, int provMapping) {
+		Map<RuleWritable, RuleData> results = new HashMap<>();
+		// If the source side is a phrase, then we want everything
+		if (sourcePattern.isPhrase()) {
+			rules.forEach(entry -> results.put(entry.getFirst(),
+					entry.getSecond()));
+			return results;
+		}
 		int numberTranslations = 0;
 		int numberTranslationsMonotone = 0; // case with more than 1 NT
 		int numberTranslationsInvert = 0;
 		int prevCount = -1;
-		IntWritable countIndex = IntWritableCache
-				.createIntWritable(provMapping);
+		double nTransConstraint = sourcePatternConstraints.get(sourcePattern).nTrans;
+		ByteWritable countIndex = new ByteWritable((byte) provMapping);
 		for (Pair<RuleWritable, RuleData> entry : rules) {
 			// number of translations per source threshold
 			// in case of ties we either keep or don't keep the ties
 			// depending on the config
-
 			RulePattern rulePattern = RulePattern.getPattern(entry.getFirst(),
 					entry.getFirst());
 			int count = (int) entry.getSecond().getProvCounts().get(countIndex)
 					.get();
-			if (!sourcePattern.isPhrase() && sourcePattern.hasMoreThan1NT()
-					&& count != prevCount) {
-				double nTransConstraint = sourcePatternConstraints
-						.get(sourcePattern).nTrans;
-				if (nTransConstraint <= numberTranslationsMonotone
-						&& nTransConstraint <= numberTranslationsInvert
-						&& nTransConstraint <= numberTranslations) {
-					break;
-				}
+			boolean notTied = count != prevCount;
+			boolean moreThan1NT = sourcePattern.hasMoreThan1NT();
+			if (notTied
+					&& ((moreThan1NT
+							&& nTransConstraint <= numberTranslationsMonotone && nTransConstraint <= numberTranslationsInvert) 
+							|| (!moreThan1NT && nTransConstraint <= numberTranslations))) {
+				break;
 			}
-			results.add(entry);
-			if (sourcePattern.hasMoreThan1NT()) {
+			results.put(entry.getFirst(), entry.getSecond());
+			if (moreThan1NT) {
 				if (rulePattern.isSwappingNT()) {
-					numberTranslationsInvert++;
+					++numberTranslationsInvert;
 				} else {
-					numberTranslationsMonotone++;
+					++numberTranslationsMonotone;
 				}
 			}
 			numberTranslations++;
@@ -219,58 +202,44 @@ class RuleFilter {
 	 * Indicates whether we should filter a rule. The decision is based on a
 	 * particular provenance.
 	 * 
-	 * @param sourcePattern
-	 *            The source pattern (e.g. w X)
-	 * @param rule
-	 *            The rule
-	 * @param features
-	 *            The features for the rule. The filtering criteria are based on
-	 *            these features.
-	 * @param provMapping
-	 *            The provenance used as a criterion for filtering.
 	 * @return
 	 */
-	private boolean filterRule(SidePattern sourcePattern, RuleWritable rule,
-			FeatureMap features, int provMapping) {
-		int s2tIndex = s2tIndices[provMapping];
-		IntWritable source2targetProbabilityIndex = IntWritableCache
-				.createIntWritable(s2tIndex);
-		// if the rule does not have that provenance, we automatically filter it
-		if (!features.containsKey(source2targetProbabilityIndex)) {
+	private boolean filterRule(Feature s2t, Feature t2s,
+			SidePattern sourcePattern, RuleWritable rule, RuleData data,
+			int provMapping) {
+		IntWritable provIW = IntWritableCache.createIntWritable(provMapping);
+		// Immediately filter if there is data for this rule under this
+		// provenance
+		if (!data.getFeatures().get(s2t).containsKey(provIW)) {
 			return true;
 		}
-		int t2sIndex = t2sIndices[provMapping];
-		IntWritable target2sourceProbabilityIndex = IntWritableCache
-				.createIntWritable(t2sIndex);
-		IntWritable countIndex = IntWritableCache
-				.createIntWritable(s2tIndex + 1);
-
-		double source2targetProbability = features.get(
-				source2targetProbabilityIndex).get();
-		double target2sourceProbability = features.get(
-				target2sourceProbabilityIndex).get();
-		int numberOfOccurrences = (int) features.get(countIndex).get();
-
 		RulePattern rulePattern = RulePattern.getPattern(rule, rule);
-		if (!sourcePattern.isPhrase() && !allowedPatterns.contains(rulePattern)) {
+		if (!(sourcePattern.isPhrase() || allowedPatterns.contains(rulePattern))) {
 			return true;
 		}
+		double source2targetProbability = data.getFeatures().get(s2t)
+				.get(provIW).get();
+		double target2sourceProbability = data.getFeatures().get(t2s)
+				.get(provIW).get();
+		int numberOfOccurrences = (int) data.getProvCounts()
+				.get(new ByteWritable((byte) provMapping)).get();
+
 		if (sourcePattern.isPhrase()) {
 			// source-to-target threshold
-			if (source2targetProbability <= minSource2TargetPhrase) {
+			if (source2targetProbability <= minSource2TargetPhraseLog) {
 				return true;
 			}
 			// target-to-source threshold
-			if (target2sourceProbability <= minTarget2SourcePhrase) {
+			if (target2sourceProbability <= minTarget2SourcePhraseLog) {
 				return true;
 			}
 		} else {
 			// source-to-target threshold
-			if (source2targetProbability <= minSource2TargetRule) {
+			if (source2targetProbability <= minSource2TargetRuleLog) {
 				return true;
 			}
 			// target-to-source threshold
-			if (target2sourceProbability <= minTarget2SourceRule) {
+			if (target2sourceProbability <= minTarget2SourceRuleLog) {
 				return true;
 			}
 			// minimum number of occurrence threshold
@@ -282,34 +251,38 @@ class RuleFilter {
 		return false;
 	}
 
-	public List<Pair<RuleWritable, RuleData>> filter(SidePattern sourcePattern,
-			Iterable<Pair<RuleWritable, RuleData>> toFilter) {
-		Set<RuleWritable> existingRules = new HashSet<>();
-		List<Pair<RuleWritable, RuleData>> allFiltered = new ArrayList<>();
-
-		// Assume that all mapping arrays (s2tIndices, t2sIndices, countIndices)
-		// have the same length
-		for (int i = 0; i < s2tIndices.length; ++i) {
-			SortedSet<Pair<RuleWritable, RuleData>> rules = new TreeSet<Pair<RuleWritable, RuleData>>(
-					comparators[i]);
+	public Map<RuleWritable, RuleData> filter(SidePattern sourcePattern,
+			List<Pair<RuleWritable, RuleData>> toFilter) {
+		// Establish the provenances used in these rules
+		Set<Integer> provenances = new HashSet<>();
+		if (!provenanceUnion) {
+			provenances.add(0);
+		} else {
 			for (Pair<RuleWritable, RuleData> entry : toFilter) {
-				RuleWritable rule = entry.getFirst();
-				RuleData rawFeatures = entry.getSecond();
-				if (filterRule(sourcePattern, rule, rawFeatures.getFeatures(), i)) {
-					continue;
-				}
-				rules.add(Pair.createPair(new RuleWritable(rule), rawFeatures));
-			}
-			List<Pair<RuleWritable, RuleData>> filtered = filterRulesBySource(
-					sourcePattern, rules, i);
-			for (Pair<RuleWritable, RuleData> ruleFiltered : filtered) {
-				if (!existingRules.contains(ruleFiltered.getFirst())) {
-					allFiltered.add(ruleFiltered);
-					existingRules.add(ruleFiltered.getFirst());
+				for (ByteWritable prov : entry.getSecond().getProvCounts()
+						.keySet()) {
+					provenances.add((int) prov.get());
 				}
 			}
 		}
-		return allFiltered;
+		Map<RuleWritable, RuleData> filtered = new HashMap<>();
+		for (int i : provenances) {
+			Feature s2t = i == 0 ? Feature.SOURCE2TARGET_PROBABILITY
+					: Feature.PROVENANCE_SOURCE2TARGET_PROBABILITY;
+			Feature t2s = i == 0 ? Feature.TARGET2SOURCE_PROBABILITY
+					: Feature.PROVENANCE_TARGET2SOURCE_PROBABILITY;
+			List<Pair<RuleWritable, RuleData>> rules = new LinkedList<>();
+			Collections.sort(toFilter, new RuleCountComparator(i));
+			for (Pair<RuleWritable, RuleData> entry : toFilter) {
+				RuleWritable rule = entry.getFirst();
+				RuleData data = entry.getSecond();
+				if (!filterRule(s2t, t2s, sourcePattern, rule, data, i)) {
+					rules.add(Pair.createPair(new RuleWritable(rule), data));
+				}
+			}
+			filtered.putAll(filterRulesBySource(sourcePattern, rules, i));
+		}
+		return filtered;
 	}
 
 	public Collection<SidePattern> getPermittedSourcePatterns() {

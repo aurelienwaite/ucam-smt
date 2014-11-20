@@ -13,7 +13,6 @@ import org.apache.hadoop.util.Tool;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.util.CLI;
 
-import com.beust.jcommander.JCommander;
 import com.beust.jcommander.ParameterException;
 
 /**
@@ -31,15 +30,13 @@ public abstract class PhraseJob extends Configured implements Tool {
 	IllegalAccessException, IOException, ClassNotFoundException,
 	InterruptedException {
 		CLI.MarginalReducerParameters params = new CLI.MarginalReducerParameters();
-		JCommander cmd = new JCommander(params);
 		try {
-			cmd.parse(args);
+			Util.parseCommandLine(args, params);
 		} catch (ParameterException e) {
-			System.err.println(e.getMessage());
-			cmd.usage();
+			return 1;
 		}
 		Configuration conf = getConf();
-		Util.ApplyConf(cmd, conf);
+		Util.ApplyConf(params, conf);
 		Job job = getJob(conf);
 		FileInputFormat.setInputPaths(job, params.input);
 		FileOutputFormat.setOutputPath(job, new Path(params.output));

@@ -26,13 +26,13 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
+import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceProbMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.rule.features.Feature;
-import uk.ac.cam.eng.rule.features.FeatureRegistry;
 import uk.ac.cam.eng.util.CLI;
-import uk.ac.cam.eng.util.Pair;
 
 /**
  * 
@@ -49,24 +49,27 @@ public class TTableClient {
 
 	private Map<List<Integer>, Double> wordAlignments = new HashMap<>();
 
-	private int[] mapping;
+	private int noOfProvs;
+	
+	Feature lexicalF;
+	
+	Feature provLexicalF;
 
 	public void setup(CLI.ServerParams params,
-			FeatureRegistry fReg, boolean source2Target) {
+			int noOfProvs, boolean source2Target) {
 		if (source2Target) {
 			port = params.ttableS2TServerPort;
 			hostName = params.ttableS2THost;
-			mapping = fReg.getFeatureIndices(
-					Feature.SOURCE_2_TARGET_LEXICAL_PROBABILITY,
-					Feature.PROVENANCE_SOURCE_2_TARGET_LEXICAL_PROBABILITY);
+			lexicalF = Feature.SOURCE2TARGET_LEXICAL_PROBABILITY;
+			provLexicalF = Feature.PROVENANCE_SOURCE2TARGET_LEXICAL_PROBABILITY;
 		} else {
 			port = params.ttableT2SServerPort;
 			hostName = params.ttableT2SHost;
-			mapping = fReg.getFeatureIndices(
-					Feature.TARGET_2_SOURCE_LEXICAL_PROBABILITY,
-					Feature.PROVENANCE_TARGET_2_SOURCE_LEXICAL_PROBABILITY);
+			lexicalF = Feature.TARGET2SOURCE_LEXICAL_PROBABILITY;
+			provLexicalF = Feature.PROVENANCE_TARGET2SOURCE_LEXICAL_PROBABILITY;
 		}
 		prob = new LexicalProbability(source2Target);
+		this.noOfProvs = noOfProvs +1;
 	}
 
 	private double[] query(Collection<List<Integer>> query) throws IOException {
@@ -102,11 +105,12 @@ public class TTableClient {
 	}
 
 	public void queryRules(
-			List<Pair<RuleWritable, RuleData>> rules)
+			Map<RuleWritable, RuleData> rules)
 			throws IOException {
-		for (Pair<RuleWritable, RuleData> entry : rules) {
-			RuleWritable key = entry.getFirst();
-			prob.buildQuery(key, mapping.length, wordAlignments);
+		for (Entry<RuleWritable, RuleData> entry : rules.entrySet()) {
+			RuleWritable key = entry.getKey();
+			// Need to add the 0th element for the global scope
+			prob.buildQuery(key, noOfProvs, wordAlignments);
 		}
 		List<List<Integer>> keys = new ArrayList<>(wordAlignments.keySet());
 		double[] results = query(keys);
@@ -116,17 +120,20 @@ public class TTableClient {
 				wordAlignments.put(keys.get(i), results[i]);
 			}
 		}
-		for (Pair<RuleWritable, RuleData> entry : rules) {
-			RuleWritable key = entry.getFirst();
-			RuleData features = entry.getSecond();
-			for (int j = 0; j < mapping.length; ++j) {
+		for (Entry<RuleWritable, RuleData> entry : rules.entrySet()) {
+			RuleWritable key = entry.getKey();
+			RuleData features = entry.getValue();
+			ProvenanceProbMap provLexProbs = new ProvenanceProbMap();
+			for (int j = 0; j < noOfProvs ; ++j) {
 				double lexProb = prob.value(key, (byte) j, wordAlignments);
-				if (features.getFeatures().containsKey(mapping[j])) {
-					throw new RuntimeException(
-							"FeatureMap already contains entry for "
-									+ mapping[j] + " " + key + " " + features);
+				if(j==0){
+					ProvenanceProbMap globalLexProb = new ProvenanceProbMap();
+					globalLexProb.put(j, lexProb);
+					features.getFeatures().put(lexicalF, globalLexProb);
+				}else{
+					provLexProbs.put(j, lexProb);
 				}
-				features.getFeatures().put(mapping[j], lexProb);
+				features.getFeatures().put(provLexicalF, provLexProbs);
 			}
 		}
 	}
