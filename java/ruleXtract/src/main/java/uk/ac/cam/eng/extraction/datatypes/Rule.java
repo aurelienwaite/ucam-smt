@@ -455,37 +455,7 @@ public final class Rule { // final because immutable class
 		return false;
 	}
 
-	/**
-	 * @return
-	 */
-	public boolean isStartingGlue() {
-		if (source.size() == 1 && source.get(0) == X && target.size() == 1
-				&& target.get(0) == X)
-			return true;
-		return false;
-	}
 
-	public boolean isStartSentence() {
-		return (source.size() == 1 && source.get(0) == 1 && target.size() == 1 && target
-				.get(0) == 1);
-	}
-
-	public boolean isEndSentence() {
-		return (source.size() == 1 && source.get(0) == 2 && target.size() == 1 && target
-				.get(0) == 2);
-	}
-
-	public boolean isDeletion() {
-		return (target.size() == 1 && target.get(0) == 0);
-	}
-
-	public boolean isOov() {
-		return (leftHandSide == -1 && source.size() == 1 && target.size() == 0);
-	}
-
-	public boolean isAscii() {
-		return (leftHandSide == -1 && source.size() == 1 && target.size() == 1);
-	}
 
 	public boolean isSwapping() {
 		// check if the rule is swapping because we have X2...X1 in the source
@@ -531,10 +501,6 @@ public final class Rule { // final because immutable class
 			}
 		}
 		return new Rule(src, trg);
-	}
-
-	public int getLeftHandSide() {
-		return leftHandSide;
 	}
 
 	public List<Integer> getSource() {

@@ -22,7 +22,8 @@ libraryDependencies ++= Seq(
 		    "org.apache.hadoop" % "hadoop-core" % "1.2.1",
 		    "org.apache.hbase" % "hbase" % "0.92.0" withSources (),
 		    "junit" % "junit" % "4.11" % "test" withSources (),
-			"com.novocode" % "junit-interface" % "0.10" % "test"
+		    "com.novocode" % "junit-interface" % "0.10" % "test",
+		    "com.jsuereth" % "scala-arm_2.11" % "1.4"
 )
 
 // output jar name is simply ruleXtract.jar

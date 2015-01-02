@@ -68,6 +68,11 @@ public class RuleExtractor {
 		termX = new HashMap<Integer, Map<Integer, Boolean>>();
 		Xterm = new HashMap<Integer, Map<Integer, Boolean>>();
 	}
+	
+	public List<Rule> extract(String src, String trg, String align) {
+	    SentencePair sp = new SentencePair(src, trg);
+		return extract(new Alignment(align, sp), sp);
+	}
 
 	/**
 	 * Extracts rules, for now extract phrase pairs according to Viterbi
@@ -96,7 +101,7 @@ public class RuleExtractor {
 	 * @param sp
 	 * @return
 	 */
-	private List<Rule> extractPhrasePairs(Alignment a, SentencePair sp) {
+	protected List<Rule> extractPhrasePairs(Alignment a, SentencePair sp) {
 
 		List<Rule> res = new ArrayList<Rule>();
 
