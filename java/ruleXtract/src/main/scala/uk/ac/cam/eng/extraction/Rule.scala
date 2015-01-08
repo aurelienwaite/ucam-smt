@@ -4,7 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.math.Ordering.Implicits.seqDerivedOrdering
 
-class Rule(val source: Vector[Symbol], val target: Vector[Symbol]) extends Equals {
+class Rule(val source: ArrayBuffer[Symbol], val target: ArrayBuffer[Symbol]) extends Equals {
 
   override def toString() = {
     source.map(_.toString).mkString("_") + " " + target.map(_.toString).mkString("_")
@@ -41,7 +41,7 @@ class Rule(val source: Vector[Symbol], val target: Vector[Symbol]) extends Equal
 }
 
 object S2TOrdering extends Ordering[Rule] {
-  val vecOrdering = seqDerivedOrdering[Vector,Symbol]
+  val vecOrdering = seqDerivedOrdering[ArrayBuffer,Symbol]
   
   override def compare(r1: Rule, r2: Rule) = {
     val diff = vecOrdering.compare(r1.source, r2.source)
