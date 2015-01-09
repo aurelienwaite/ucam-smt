@@ -131,8 +131,7 @@ class Alignment {
   def extractPhraseAlignment(spans: (Span, Span)): Alignment = {
     val phraseAlignment = new Alignment
     s2t.foreach {
-      case (src, value) => value.foreach { trg =>
-        {
+      case (src, value) => value.foreach { trg =>{
           spans match {
             case (srcSpan: PhraseSpan, trgSpan: PhraseSpan) =>
               if (src >= srcSpan.start && src <= srcSpan.end)

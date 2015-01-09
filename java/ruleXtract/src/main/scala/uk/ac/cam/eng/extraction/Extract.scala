@@ -30,7 +30,7 @@ object Extract {
             for (i <- srcSpan.start to srcSpan.end if srcAligned) {
               srcAligned &= a.isSourceAligned(i)
             }
-            if (srcAligned && srcSpan.end - srcSpan.start <= options.maxNonTerminalSpan) {
+            if (srcAligned && srcSpan.end - srcSpan.start +1 <= options.maxNonTerminalSpan) {
               childPhrases += pair
             }
           } else {
@@ -172,7 +172,7 @@ object Extract {
         }else
           srcSpan
       }
-      case _                  => new PhraseSpan(-1, -1)
+      case _ => new PhraseSpan(-1, -1)
     }
 
   }
