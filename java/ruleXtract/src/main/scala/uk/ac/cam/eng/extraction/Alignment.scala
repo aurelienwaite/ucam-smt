@@ -20,9 +20,9 @@ class Alignment {
 
   def this(other: Alignment) = {
     this()
-    for((key, value) <- other.s2t)
+    for ((key, value) <- other.s2t)
       s2t(key) = new ArrayBuffer[Int] ++= value
-        for((key, value) <- other.t2s)
+    for ((key, value) <- other.t2s)
       t2s(key) = new ArrayBuffer[Int] ++= value
   }
 
@@ -120,17 +120,32 @@ class Alignment {
     }
     adjusted
   }
-  
-  def extractPhraseAlignment(srcStartSpan: Int, srcEndSpan: Int, trgStartSpan: Int) : Alignment ={
+
+  private def adjustIndex(x: Int, span: OneNTSpan): Int = {
+    if (x < span.startX)
+      x - span.start
+    else
+      x - span.endX - 1
+  }
+
+  def extractPhraseAlignment(spans: (Span, Span)): Alignment = {
     val phraseAlignment = new Alignment
     s2t.foreach {
       case (src, value) => value.foreach { trg =>
-        if(src>=srcStartSpan && src<=srcEndSpan) 
-          phraseAlignment.addAlignment(src-srcStartSpan, trg-trgStartSpan)
+        {
+          spans match {
+            case (srcSpan: PhraseSpan, trgSpan: PhraseSpan) =>
+              if (src >= srcSpan.start && src <= srcSpan.end)
+                phraseAlignment.addAlignment(src - srcSpan.start, trg - trgSpan.start)
+            case (srcSpan: OneNTSpan, trgSpan: OneNTSpan) =>
+              if (src >= srcSpan.start && src < srcSpan.startX || src > srcSpan.endX && src <= srcSpan.end)
+                phraseAlignment.addAlignment(adjustIndex(src, srcSpan), adjustIndex(trg, trgSpan))
+            case _ => 
+          }
+        }
       }
     }
-    phraseAlignment.sortAlignments()
+    phraseAlignment
   }
-  
-  
+
 }

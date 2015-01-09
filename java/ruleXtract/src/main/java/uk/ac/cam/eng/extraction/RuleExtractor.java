@@ -69,7 +69,7 @@ public class RuleExtractor {
 		Xterm = new HashMap<Integer, Map<Integer, Boolean>>();
 	}
 	
-	public List<Rule> extract(String src, String trg, String align) {
+	public java.util.List<uk.ac.cam.eng.extraction.datatypes.Rule> extract(String src, String trg, String align) {
 	    SentencePair sp = new SentencePair(src, trg);
 		return extract(new Alignment(align, sp), sp);
 	}
