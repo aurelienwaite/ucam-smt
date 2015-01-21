@@ -22,21 +22,18 @@ package uk.ac.cam.eng.rule.retrieval;
 import java.util.ArrayList;
 import java.util.List;
 
-import uk.ac.cam.eng.extraction.datatypes.Rule;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
-
 /**
  * This class represents a pattern for one side of a rule, e.g. wXw
  * 
  * @author Juan Pino
  * @date 28 May 2014
  */
-class SidePattern {
+public class SidePattern {
 
 	private List<String> pattern;
 	private int numberOfNT;
 
-	SidePattern(List<String> pattern) {
+	public SidePattern(List<String> pattern) {
 		this.pattern = pattern;
 		numberOfNT = 0;
 		for (String elt : pattern) {
@@ -74,56 +71,6 @@ class SidePattern {
 		return new SidePattern(elements);
 	}
 
-	static SidePattern getPattern(String patternString) {
-		String parts[] = patternString.split("_");
-		List<String> pattern = new ArrayList<String>();
-		boolean consecutiveTerminals = false;
-		for (String part : parts) {
-			if (part.equals("-1") || part.equals("-2") || part.equals("-3")) {
-				pattern.add(part);
-				consecutiveTerminals = false;
-			} else {
-				if (!consecutiveTerminals) {
-					pattern.add("w");
-				}
-				consecutiveTerminals = true;
-			}
-		}
-		return new SidePattern(pattern);
-	}
-
-	private static SidePattern getPattern(List<Integer> ruleSide) {
-		List<String> pattern = new ArrayList<String>();
-		boolean consecutiveTerminals = false;
-		for (Integer elt : ruleSide) {
-			if (elt < 0) {
-				pattern.add(elt.toString());
-				consecutiveTerminals = false;
-			} else {
-				if (!consecutiveTerminals) {
-					pattern.add("w");
-				}
-				consecutiveTerminals = true;
-			}
-		}
-		return new SidePattern(pattern);
-	}
-
-	static SidePattern getSourcePattern(RuleWritable rule) {
-		return getPattern(rule.getSource().toString());
-	}
-
-	static SidePattern getTargetPattern(RuleWritable rule) {
-		return getPattern(rule.getTarget().toString());
-	}
-
-	static SidePattern getSourcePattern(Rule rule) {
-		return getPattern(rule.getSource());
-	}
-
-	static SidePattern getTargetPattern(Rule rule) {
-		return getPattern(rule.getTarget());
-	}
 
 	public boolean isPhrase() {
 		return (pattern.size() == 1 && pattern.get(0).equals("w"));

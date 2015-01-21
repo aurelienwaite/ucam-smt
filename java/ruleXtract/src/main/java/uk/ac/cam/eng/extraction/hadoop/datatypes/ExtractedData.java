@@ -27,6 +27,9 @@ import org.apache.hadoop.io.ByteWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Writable;
 
+import uk.ac.cam.eng.extraction.Alignment;
+
+
 /**
  * Additional info about a rule that is used to build mapreduce features. The
  * ExtractedData is the output value in the extraction mapper and the input
@@ -65,7 +68,7 @@ public class ExtractedData implements Writable {
 		provenance.put(provenanceName, count);
 	}
 
-	public void putAlignmentCount(AlignmentWritable align, int count) {
+	public void putAlignmentCount(Alignment align, int count) {
 		alignment.put(align, count);
 	}
 

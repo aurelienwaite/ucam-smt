@@ -1,10 +1,12 @@
 package uk.ac.cam.eng.extraction
 
-import collection.mutable.{ HashMap, SortedSet, TreeSet }
-import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.HashMap
 
-class Alignment {
+import org.apache.hadoop.io.Writable
+import org.apache.hadoop.io.WritableUtils
+
+class Alignment extends Writable {
 
   val s2t = new HashMap[Int, ArrayBuffer[Int]]
   val t2s = new HashMap[Int, ArrayBuffer[Int]]
@@ -15,7 +17,7 @@ class Alignment {
     for (alignment <- alignments) {
       addAlignment(alignment(0), alignment(1))
     }
-    sortAlignments()
+    prepareAlignments()
   }
 
   def this(other: Alignment) = {
@@ -44,11 +46,14 @@ class Alignment {
 
   private def addAlignment(sourceIndex: Int, targetIndex: Int) {
     s2t.getOrElseUpdate(sourceIndex, new ArrayBuffer) += targetIndex
-    t2s.getOrElseUpdate(targetIndex, new ArrayBuffer) += sourceIndex
   }
 
-  private def sortAlignments(): Alignment = {
-    for ((k, a) <- s2t) s2t(k) = a.sortWith(_ < _)
+  def prepareAlignments(): Alignment = {
+    for ((k, a) <- s2t) {
+      s2t(k) = a.sortWith(_ < _)
+      for (t <- a)
+        t2s.getOrElseUpdate(t, new ArrayBuffer) += k
+    }
     for ((k, a) <- t2s) t2s(k) = a.sortWith(_ < _)
     this
   }
@@ -70,16 +75,6 @@ class Alignment {
     buff.toString
   }
 
-  def incrementTrg(inc: Int): Alignment = {
-    val decremented = new Alignment()
-    s2t.foreach {
-      case (key, value) => {
-        value.foreach { t => decremented.addAlignment(key, t + inc) }
-      }
-    }
-    return decremented
-  }
-
   def canEqual(other: Any) = {
     other.isInstanceOf[uk.ac.cam.eng.extraction.Alignment]
   }
@@ -96,55 +91,72 @@ class Alignment {
     prime * (prime + s2t.hashCode) + t2s.hashCode
   }
 
-  def adjustExtractedAlignments(srcStartSpan: Int, srcEndSpan: Int, trgStartSpan: Int, trgEndSpan: Int, phrase: Rule): Alignment = {
-    val adjusted = new Alignment()
-    s2t.foreach {
-      case (src, value) => value.foreach { trg =>
-        if ((src < srcStartSpan || src > srcEndSpan) &&
-          (trg < trgStartSpan || trg > trgEndSpan)) {
-          val newSrc = if (src > srcStartSpan) src - phrase.source.length + 1 else src
-          val newTrg = if (trg > trgStartSpan) trg - phrase.target.length + 1 else trg
-          adjusted.s2t.getOrElseUpdate(newSrc, new ArrayBuffer) += newTrg
-        }
-      }
-    }
-    t2s.foreach {
-      case (trg, value) => value.foreach { src =>
-        if ((src < srcStartSpan || src > srcEndSpan) &&
-          (trg < trgStartSpan || trg > trgEndSpan)) {
-          val newSrc = if (src > srcStartSpan) src - phrase.source.length + 1 else src
-          val newTrg = if (trg > trgStartSpan) trg - phrase.target.length + 1 else trg
-          adjusted.t2s.getOrElseUpdate(newTrg, new ArrayBuffer) += newSrc
-        }
-      }
-    }
-    adjusted
-  }
-
-  private def adjustIndex(x: Int, span: OneNTSpan): Int = {
-    if (x < span.startX)
-      x - span.start
+  private def adjustIndex(a: Int, span: OneNTSpan): Int =
+    if (a < span.startX)
+      a - span.start
     else
-      x - span.endX - 1
+      a - span.start - (span.endX + 1 - span.startX) + 1
+
+  private def adjustIndex2NT(a: Int, span: TwoNTSpan): Int = {
+    val inverted = span.startX2 < span.startX
+    val (ntSpan1Start, ntSpan1End) = if (inverted) (span.startX2, span.endX2) else (span.startX, span.endX)
+    val (ntSpan2Start, ntSpan2End) = if (inverted) (span.startX, span.endX) else (span.startX2, span.endX2)
+    val ntSpan1Offset = (ntSpan1End + 1 - ntSpan1Start) - 1
+    if (a < ntSpan1Start)
+      a - span.start
+    else if (a < ntSpan2Start)
+      a - span.start - ntSpan1Offset
+    else
+      a - span.start - ntSpan1Offset - (ntSpan2End + 1 - ntSpan2Start) + 1
   }
 
   def extractPhraseAlignment(spans: (Span, Span)): Alignment = {
     val phraseAlignment = new Alignment
+    val isInPhrase = (src: Int, srcSpan: Span) => src >= srcSpan.start && src <= srcSpan.end
+    val isIn1NT = (src: Int, srcSpan: oneNT) => src < srcSpan.startX || src > srcSpan.endX
+    val isIn2NT = (src: Int, srcSpan: TwoNTSpan) => src < srcSpan.startX2 || src > srcSpan.endX2
     s2t.foreach {
-      case (src, value) => value.foreach { trg =>{
+      case (src, value) => value.foreach { trg =>
+        {
           spans match {
             case (srcSpan: PhraseSpan, trgSpan: PhraseSpan) =>
-              if (src >= srcSpan.start && src <= srcSpan.end)
+              if (isInPhrase(src, srcSpan))
                 phraseAlignment.addAlignment(src - srcSpan.start, trg - trgSpan.start)
             case (srcSpan: OneNTSpan, trgSpan: OneNTSpan) =>
-              if (src >= srcSpan.start && src < srcSpan.startX || src > srcSpan.endX && src <= srcSpan.end)
+              if (isInPhrase(src, srcSpan) && isIn1NT(src, srcSpan))
                 phraseAlignment.addAlignment(adjustIndex(src, srcSpan), adjustIndex(trg, trgSpan))
-            case _ => 
+            case (srcSpan: TwoNTSpan, trgSpan: TwoNTSpan) =>
+              if (isInPhrase(src, srcSpan) && isIn1NT(src, srcSpan) && isIn2NT(src, srcSpan))
+                phraseAlignment.addAlignment(adjustIndex2NT(src, srcSpan), adjustIndex2NT(trg, trgSpan))
+            case _ =>
           }
         }
       }
     }
     phraseAlignment
+  }
+
+  def readFields(in: java.io.DataInput): Unit = {
+    s2t.clear()
+    t2s.clear()
+    for(i <- 0 until WritableUtils.readVInt(in)){
+      val s = WritableUtils.readVInt(in)
+      for(j <- 0 until WritableUtils.readVInt(in)){
+        val t = WritableUtils.readVInt(in)
+        addAlignment(s, t)
+      }
+    }
+  }
+
+  def write(out: java.io.DataOutput): Unit = {
+    WritableUtils.writeVInt(out, s2t.size)
+    for ((s, a) <- s2t) {
+      WritableUtils.writeVInt(out, s)
+      WritableUtils.writeVInt(out, a.size)
+      for (t <- a) {
+        WritableUtils.writeVInt(out, t)
+      }
+    }
   }
 
 }

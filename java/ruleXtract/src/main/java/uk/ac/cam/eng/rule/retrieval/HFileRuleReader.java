@@ -27,10 +27,10 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.DataOutputBuffer;
-import org.apache.hadoop.io.Text;
 
+import uk.ac.cam.eng.extraction.Rule;
+import uk.ac.cam.eng.extraction.WritableArrayBuffer;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
 import uk.ac.cam.eng.util.Pair;
 
@@ -39,20 +39,18 @@ import uk.ac.cam.eng.util.Pair;
  * @author Aurelien Waite
  * @date 28 May 2014
  */
-public class HFileRuleReader implements
-		Iterable<Pair<RuleWritable, RuleData>> {
+public class HFileRuleReader implements Iterable<Pair<Rule, RuleData>> {
 
 	private HFileScanner scanner;
 
 	private final DataInputBuffer in = new DataInputBuffer();
 	private final DataOutputBuffer out = new DataOutputBuffer();
-	private final RuleWritable rule = new RuleWritable();
+	private final Rule rule = new Rule();
 	private final TargetFeatureList value = new TargetFeatureList();
-	private Text key = new Text();
+	private WritableArrayBuffer key = new WritableArrayBuffer();
 
 	public HFileRuleReader(HFile.Reader hfReader) {
 		scanner = hfReader.getScanner(false, false);
-		rule.setLeftHandSide(EnumRuleType.EXTRACTED.getLhs());
 		rule.setSource(key);
 	}
 
@@ -67,7 +65,7 @@ public class HFileRuleReader implements
 		}
 	}
 
-	boolean seek(Text source) throws IOException {
+	boolean seek(WritableArrayBuffer source) throws IOException {
 		out.reset();
 		source.write(out);
 		int pos = scanner.seekTo(out.getData(), 0, out.getLength());
@@ -79,16 +77,16 @@ public class HFileRuleReader implements
 		}
 	}
 
-	public Iterable<Pair<RuleWritable, RuleData>> getRulesForSource() {
+	public Iterable<Pair<Rule, RuleData>> getRulesForSource() {
 		readValue();
-		final Iterator<Pair<Text, RuleData>> instance = value
+		final Iterator<Pair<WritableArrayBuffer, RuleData>> instance = value
 				.iterator();
 
-		return new Iterable<Pair<RuleWritable, RuleData>>() {
+		return new Iterable<Pair<Rule, RuleData>>() {
 
 			@Override
-			public Iterator<Pair<RuleWritable, RuleData>> iterator() {
-				return new Iterator<Pair<RuleWritable, RuleData>>() {
+			public Iterator<Pair<Rule, RuleData>> iterator() {
+				return new Iterator<Pair<Rule, RuleData>>() {
 
 					@Override
 					public boolean hasNext() {
@@ -96,8 +94,8 @@ public class HFileRuleReader implements
 					}
 
 					@Override
-					public Pair<RuleWritable, RuleData> next() {
-						Pair<Text, RuleData> next = instance
+					public Pair<Rule, RuleData> next() {
+						Pair<WritableArrayBuffer, RuleData> next = instance
 								.next();
 						rule.setTarget(next.getFirst());
 						return Pair.createPair(rule, next.getSecond());
@@ -113,20 +111,15 @@ public class HFileRuleReader implements
 		};
 	}
 
-	private Text readSource() {
+	private WritableArrayBuffer readSource() {
 		in.reset(scanner.getKey().array(), scanner.getKey().arrayOffset(),
 				scanner.getKey().limit());
-		try {
-			key.readFields(in);
-		} catch (IOException e) {
-			// Should not happen! We are only reading buffered bytes.
-			throw new RuntimeException(e);
-		}
+		key.readFields(in);
 		return key;
 	}
 
 	@Override
-	public Iterator<Pair<RuleWritable, RuleData>> iterator() {
+	public Iterator<Pair<Rule, RuleData>> iterator() {
 		boolean temp = false;
 		try {
 			temp = scanner.seekTo();
@@ -135,14 +128,13 @@ public class HFileRuleReader implements
 		}
 		final boolean isNotEmpty = temp;
 		if (!isNotEmpty) {
-			return Collections
-					.<Pair<RuleWritable, RuleData>> emptyList()
+			return Collections.<Pair<Rule, RuleData>> emptyList()
 					.iterator();
 		}
 		readSource();
-		return new Iterator<Pair<RuleWritable, RuleData>>() {
+		return new Iterator<Pair<Rule, RuleData>>() {
 
-			Iterator<Pair<RuleWritable, RuleData>> targetIter;
+			Iterator<Pair<Rule, RuleData>> targetIter;
 
 			boolean hasNext = isNotEmpty;
 
@@ -152,7 +144,7 @@ public class HFileRuleReader implements
 			}
 
 			@Override
-			public Pair<RuleWritable, RuleData> next() {
+			public Pair<Rule, RuleData> next() {
 				if (targetIter == null) {
 					targetIter = getRulesForSource().iterator();
 					try {
@@ -197,7 +189,7 @@ public class HFileRuleReader implements
 					new Path(fileName), cacheConf);
 			HFileRuleReader ruleReader = new HFileRuleReader(hfReader);
 			for (@SuppressWarnings("unused")
-			Pair<RuleWritable, RuleData> entry : ruleReader) {
+			Pair<Rule, RuleData> entry : ruleReader) {
 				++count;
 				++fileCount;
 			}

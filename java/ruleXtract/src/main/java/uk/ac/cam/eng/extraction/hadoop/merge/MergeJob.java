@@ -20,7 +20,6 @@ import java.io.IOException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
@@ -31,10 +30,11 @@ import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
+import uk.ac.cam.eng.extraction.Rule;
+import uk.ac.cam.eng.extraction.WritableArrayBuffer;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ExtractedData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
 import uk.ac.cam.eng.extraction.hadoop.util.SimpleHFileOutputFormat;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
@@ -51,12 +51,12 @@ import com.beust.jcommander.ParameterException;
 public class MergeJob extends Configured implements Tool {
 
 	private static class MergeFeatureMapper extends
-			Mapper<RuleWritable, FeatureMap, RuleWritable, RuleData> {
+			Mapper<Rule, FeatureMap, Rule, RuleData> {
 
 		private RuleData ruleData = new RuleData();
 
 		@Override
-		protected void map(RuleWritable key, FeatureMap value, Context context)
+		protected void map(Rule key, FeatureMap value, Context context)
 				throws IOException, InterruptedException {
 			ruleData.setFeatures(value);
 			context.write(key, ruleData);
@@ -65,12 +65,12 @@ public class MergeJob extends Configured implements Tool {
 	}
 
 	private static class MergeRuleMapper extends
-			Mapper<RuleWritable, ExtractedData, RuleWritable, RuleData> {
+			Mapper<Rule, ExtractedData, Rule, RuleData> {
 
 		private RuleData ruleData = new RuleData();
 
 		@Override
-		protected void map(RuleWritable key, ExtractedData value,
+		protected void map(Rule key, ExtractedData value,
 				Context context) throws IOException, InterruptedException {
 			ruleData.setProvCounts(value.getProvenanceCountMap());
 			ruleData.setAlignments(value.getAlignmentCountMapWritable());
@@ -79,12 +79,12 @@ public class MergeJob extends Configured implements Tool {
 	}
 
 	private static class MergeCombiner extends
-			Reducer<RuleWritable, RuleData, RuleWritable, RuleData> {
+			Reducer<Rule, RuleData, Rule, RuleData> {
 
 		private RuleData ruleData = new RuleData();
 
 		@Override
-		protected void reduce(RuleWritable key, Iterable<RuleData> values,
+		protected void reduce(Rule key, Iterable<RuleData> values,
 				Context context) throws IOException, InterruptedException {
 			ruleData.clear();
 			for (RuleData value : values) {
@@ -95,29 +95,31 @@ public class MergeJob extends Configured implements Tool {
 	}
 
 	private static class MergeReducer extends
-			Reducer<RuleWritable, RuleData, Text, TargetFeatureList> {
+			Reducer<Rule, RuleData, WritableArrayBuffer, TargetFeatureList> {
 
 		private TargetFeatureList list = new TargetFeatureList();
 
-		private Text source = new Text();
+		private WritableArrayBuffer source = new WritableArrayBuffer();
 
 		@Override
-		protected void reduce(RuleWritable key, Iterable<RuleData> values,
+		protected void reduce(Rule key, Iterable<RuleData> values,
 				Context context) throws IOException, InterruptedException {
 			// First rule!
-			if (source.getLength() == 0) {
-				source.set(key.getSource());
+			if (source.javaSize() == 0) {
+				source.set(key.source());
 			}
-			if (!source.equals(key.getSource())) {
+			if (!source.equals(key.source())) {
 				context.write(source, list);
 				list.clear();
-				source.set(key.getSource());
+				source.set(key.source());
 			}
 			RuleData ruleData = new RuleData();
 			for (RuleData value : values) {
 				ruleData.merge(value);
 			}
-			list.add(Pair.createPair(new Text(key.getTarget()), ruleData));
+			WritableArrayBuffer target = new WritableArrayBuffer();
+			target.set(key.target());
+			list.add(Pair.createPair(target, ruleData));
 		}
 
 		@Override
@@ -140,10 +142,10 @@ public class MergeJob extends Configured implements Tool {
 		job.setPartitionerClass(MergePartitioner.class);
 		job.setReducerClass(MergeReducer.class);
 		job.setCombinerClass(MergeCombiner.class);
-		job.setMapOutputKeyClass(RuleWritable.class);
+		job.setMapOutputKeyClass(Rule.class);
 		job.setMapOutputValueClass(RuleData.class);
-		job.setOutputKeyClass(RuleWritable.class);
-		job.setOutputValueClass(RuleData.class);
+		job.setOutputKeyClass(Rule.class);
+		job.setOutputValueClass(WritableArrayBuffer.class);
 		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(SimpleHFileOutputFormat.class);
 		return job;

@@ -16,9 +16,9 @@
 package uk.ac.cam.eng.extraction.hadoop.features.phrase;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
@@ -27,10 +27,11 @@ import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 import org.apache.hadoop.util.ToolRunner;
 
+import uk.ac.cam.eng.extraction.Rule;
+import uk.ac.cam.eng.extraction.Symbol;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ExtractedData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceCountMap;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 
 /**
  * 
@@ -51,12 +52,12 @@ public class Source2TargetJob extends PhraseJob{
 	}
 
 	private static class Source2TargetPartitioner extends
-			Partitioner<RuleWritable, ProvenanceCountMap> {
+			Partitioner<Rule, ProvenanceCountMap> {
 
-		private Partitioner<Text, ProvenanceCountMap> defaultPartitioner = new HashPartitioner<>();
+		private Partitioner<List<Symbol>, ProvenanceCountMap> defaultPartitioner = new HashPartitioner<>();
 
 		@Override
-		public int getPartition(RuleWritable key, ProvenanceCountMap value,
+		public int getPartition(Rule key, ProvenanceCountMap value,
 				int numPartitions) {
 			return defaultPartitioner.getPartition(key.getSource(), value,
 					numPartitions);
@@ -66,10 +67,10 @@ public class Source2TargetJob extends PhraseJob{
 
 	private static class KeepProvenanceCountsOnlyMapper
 			extends
-			Mapper<RuleWritable, ExtractedData, RuleWritable, ProvenanceCountMap> {
+			Mapper<Rule, ExtractedData, Rule, ProvenanceCountMap> {
 
 		@Override
-		protected void map(RuleWritable key, ExtractedData value,
+		protected void map(Rule key, ExtractedData value,
 				Context context) throws IOException, InterruptedException {
 			context.write(key, value.getProvenanceCountMap());
 		}
@@ -88,9 +89,9 @@ public class Source2TargetJob extends PhraseJob{
 		job.setPartitionerClass(Source2TargetPartitioner.class);
 		job.setMapperClass(KeepProvenanceCountsOnlyMapper.class);
 		job.setReducerClass(MarginalReducer.class);
-		job.setMapOutputKeyClass(RuleWritable.class);
+		job.setMapOutputKeyClass(Rule.class);
 		job.setMapOutputValueClass(ProvenanceCountMap.class);
-		job.setOutputKeyClass(RuleWritable.class);
+		job.setOutputKeyClass(Rule.class);
 		job.setOutputValueClass(FeatureMap.class);
 		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);

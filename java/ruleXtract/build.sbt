@@ -16,6 +16,8 @@ EclipseKeys.withSource := true
 // ("eclipse cannot nest output folder")
 //target := file("bin")
 
+resolvers += Resolver.sonatypeRepo("snapshots")
+
 // depends on hadoop, hbase and junit
 libraryDependencies ++= Seq(
 		    "com.beust" % "jcommander" % "1.35",
@@ -23,8 +25,11 @@ libraryDependencies ++= Seq(
 		    "org.apache.hbase" % "hbase" % "0.92.0" withSources (),
 		    "junit" % "junit" % "4.11" % "test" withSources (),
 		    "com.novocode" % "junit-interface" % "0.10" % "test",
-		    "com.jsuereth" % "scala-arm_2.11" % "1.4"
-)
+		    "com.jsuereth" % "scala-arm_2.11" % "1.4",
+		    "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test"
+		    )
+
+scalaVersion := "2.11.4"
 
 // output jar name is simply ruleXtract.jar
 artifactName in (Compile, packageBin) := { (sv: ScalaVersion, module: ModuleID, artifact: Artifact) =>

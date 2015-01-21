@@ -19,8 +19,7 @@
 
 package uk.ac.cam.eng.rule.retrieval;
 
-import uk.ac.cam.eng.extraction.datatypes.Rule;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
+import uk.ac.cam.eng.extraction.Rule;
 
 /**
  * This class represents a pattern (e.g. wXw-wXw)
@@ -49,15 +48,10 @@ public class RulePattern {
 				SidePattern.parsePattern(sourceTarget[1]));
 	}
 
-	static RulePattern getPattern(RuleWritable source,
-			RuleWritable target) {
-		return new RulePattern(SidePattern.getSourcePattern(source),
-				SidePattern.getTargetPattern(target));
-	}
 
 	public static RulePattern getPattern(Rule rule) {
-		return new RulePattern(SidePattern.getSourcePattern(rule),
-				SidePattern.getTargetPattern(rule));
+		return new RulePattern(rule.source().toPattern(),
+				rule.target().toPattern());
 	}
 
 	public boolean isSwappingNT() {

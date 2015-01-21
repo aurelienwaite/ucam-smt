@@ -51,8 +51,11 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 
-import uk.ac.cam.eng.extraction.datatypes.Rule;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
+import uk.ac.cam.eng.extraction.Rule;
+import uk.ac.cam.eng.extraction.S;
+import uk.ac.cam.eng.extraction.Symbol;
+import uk.ac.cam.eng.extraction.WritableArrayBuffer;
+import uk.ac.cam.eng.extraction.X;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
 import uk.ac.cam.eng.util.CLI;
@@ -78,19 +81,19 @@ public class RuleRetriever {
 
 	private HFileRuleReader[] readers;
 
-	private Partitioner<Text, NullWritable> partitioner = new HashPartitioner<>();
+	private Partitioner<WritableArrayBuffer, NullWritable> partitioner = new HashPartitioner<>();
 
 	RuleFilter filter;
 
 	private String passThroughRulesFileName;
 
-	Set<RuleWritable> passThroughRules;
+	Set<Rule> passThroughRules;
 
-	Set<RuleWritable> foundPassThroughRules = new HashSet<>();
+	Set<Rule> foundPassThroughRules = new HashSet<>();
 
-	Set<Text> testVocab;
+	Set<WritableArrayBuffer> testVocab;
 
-	Set<Text> foundTestVocab = new HashSet<>();
+	Set<WritableArrayBuffer> foundTestVocab = new HashSet<>();
 
 	private int maxSourcePhrase;
 
@@ -104,10 +107,10 @@ public class RuleRetriever {
 		filter = new RuleFilter(params.fp, fReg);
 		maxSourcePhrase = params.rp.maxSourcePhrase;
 		passThroughRules = getPassThroughRules();
-		Set<Text> fullTestVocab = getTestVocab(testFile);
-		Set<Text> passThroughVocab = getPassThroughVocab();
+		Set<WritableArrayBuffer> fullTestVocab = getTestVocab(testFile);
+		Set<WritableArrayBuffer> passThroughVocab = getPassThroughVocab();
 		testVocab = new HashSet<>();
-		for (Text word : fullTestVocab) {
+		for (WritableArrayBuffer word : fullTestVocab) {
 			if (!passThroughVocab.contains(word)) {
 				testVocab.add(word);
 			}
@@ -144,8 +147,8 @@ public class RuleRetriever {
 		}
 	}
 
-	private Set<RuleWritable> getPassThroughRules() throws IOException {
-		Set<RuleWritable> res = new HashSet<>();
+	private Set<Rule> getPassThroughRules() throws IOException {
+		Set<Rule> res = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(
 				passThroughRulesFileName))) {
 			String line;
@@ -162,22 +165,22 @@ public class RuleRetriever {
 										+ passThroughRulesFileName);
 						System.exit(1);
 					}
-					List<Integer> source = new ArrayList<Integer>();
-					List<Integer> target = new ArrayList<Integer>();
+					List<Symbol> source = new ArrayList<Symbol>();
+					List<Symbol> target = new ArrayList<Symbol>();
 					int i = 0;
 					while (i < sourceString.length) {
 						if (i % maxSourcePhrase == 0 && i > 0) {
-							Rule rule = new Rule(-1, source, target);
-							res.add(new RuleWritable(rule));
+							Rule rule = new Rule(source, target);
+							res.add(rule);
 							source.clear();
 							target.clear();
 						}
-						source.add(Integer.parseInt(sourceString[i]));
-						target.add(Integer.parseInt(targetString[i]));
+						source.add(Symbol.deserialise(Integer.parseInt(sourceString[i])));
+						target.add(Symbol.deserialise(Integer.parseInt(targetString[i])));
 						i++;
 					}
-					Rule rule = new Rule(-1, source, target);
-					res.add(new RuleWritable(rule));
+					Rule rule = new Rule(source, target);
+					res.add(rule);
 				} else {
 					System.err.println("Malformed pass through rules file: "
 							+ passThroughRulesFileName);
@@ -188,10 +191,10 @@ public class RuleRetriever {
 		return res;
 	}
 
-	private Set<Text> getPassThroughVocab() throws IOException {
+	private Set<WritableArrayBuffer> getPassThroughVocab() throws IOException {
 		// TODO simplify all template writing
 		// TODO getAsciiVocab is redundant with getAsciiConstraints
-		Set<Text> res = new HashSet<>();
+		Set<WritableArrayBuffer> res = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(
 				passThroughRulesFileName))) {
 			String line;
@@ -202,7 +205,9 @@ public class RuleRetriever {
 					String[] sourceString = matcher.group(1).split(" ");
 					// only one word
 					if (sourceString.length == 1) {
-						res.add(new Text(sourceString[0]));
+						WritableArrayBuffer v = new WritableArrayBuffer();
+						v.add(Symbol.deserialise(sourceString[0]));
+						res.add(v);
 					}
 				} else {
 					System.err
@@ -215,59 +220,59 @@ public class RuleRetriever {
 		return res;
 	}
 
-	private Set<Text> getTestVocab(String testFile)
+	private Set<WritableArrayBuffer> getTestVocab(String testFile)
 			throws FileNotFoundException, IOException {
-		Set<Text> res = new HashSet<>();
+		Set<WritableArrayBuffer> res = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(testFile))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				String[] parts = line.split("\\s+");
 				for (String part : parts) {
-					res.add(new Text(part));
+					WritableArrayBuffer v = new WritableArrayBuffer();
+					v.add(Symbol.deserialise(part));
+					res.add(v);
 				}
 			}
 		}
 		return res;
 	}
 
-	public Collection<Pair<RuleWritable, SortedMap<Integer, Double>>> getGlueRules() {
-		List<Pair<RuleWritable, SortedMap<Integer, Double>>> res = new ArrayList<>();
-		List<Integer> sideGlueRule1 = new ArrayList<Integer>();
-		sideGlueRule1.add(-4);
-		sideGlueRule1.add(-1);
-		Rule glueRule1 = new Rule(-4, sideGlueRule1, sideGlueRule1);
-		res.add(Pair.createPair(new RuleWritable(glueRule1),
-				fReg.getDefaultGlueFeatures()));
-		List<Integer> sideGlueRule2 = new ArrayList<Integer>();
-		sideGlueRule2.add(-1);
-		Rule glueRule2 = new Rule(-1, sideGlueRule2, sideGlueRule2);
-		res.add(Pair.createPair(new RuleWritable(glueRule2),
-				new TreeMap<Integer,Double>()));
-		List<Integer> sideGlueRule3 = new ArrayList<>();
-		sideGlueRule3.add(-1);
-		Rule glueRule3 = new Rule(-4, sideGlueRule3, sideGlueRule3);
-		res.add(Pair.createPair(new RuleWritable(glueRule3),
-				new TreeMap<Integer,Double>()));
-		List<Integer> startSentenceSide = new ArrayList<Integer>();
-		startSentenceSide.add(1);
-		Rule startSentence = new Rule(-1, startSentenceSide, startSentenceSide);
-		res.add(Pair.createPair(new RuleWritable(startSentence),
-				fReg.getDefaultGlueStartOrEndFeatures()));
-		List<Integer> endSentenceSide = new ArrayList<Integer>();
-		endSentenceSide.add(2);
-		Rule endSentence = new Rule(-1, endSentenceSide, endSentenceSide);
-		res.add(Pair.createPair(new RuleWritable(endSentence),
-				fReg.getDefaultGlueStartOrEndFeatures()));
-		return res;
+	public void writeGlueRules(BufferedWriter out) {
+		List<Symbol> sideGlueRule1 = new ArrayList<Symbol>();
+		sideGlueRule1.add(Symbol.deserialise(-4));
+		sideGlueRule1.add(Symbol.deserialise(-1));
+		Rule glueRule1 = new Rule(sideGlueRule1, sideGlueRule1);
+		writeRule("-4", glueRule1,
+				fReg.getDefaultGlueFeatures(), out);
+		List<Symbol> sideGlueRule2 = new ArrayList<Symbol>();
+		sideGlueRule2.add(Symbol.deserialise(-1));
+		Rule glueRule2 = new Rule(sideGlueRule2, sideGlueRule2);
+		writeRule("-1",glueRule2, new TreeMap<Integer,Double>(),
+				out);
+		List<Symbol> sideGlueRule3 = new ArrayList<>();
+		sideGlueRule3.add(Symbol.deserialise(-1));
+		Rule glueRule3 = new Rule(sideGlueRule3, sideGlueRule3);
+		writeRule("-4", glueRule3,
+				new TreeMap<Integer,Double>(), out);
+		List<Symbol> startSentenceSide = new ArrayList<Symbol>();
+		startSentenceSide.add(Symbol.deserialise(1));
+		Rule startSentence = new Rule(startSentenceSide, startSentenceSide);
+		writeRule("-1", startSentence,
+				fReg.getDefaultGlueStartOrEndFeatures(), out);
+		List<Symbol> endSentenceSide = new ArrayList<Symbol>();
+		endSentenceSide.add(Symbol.deserialise(2));
+		Rule endSentence = new Rule(endSentenceSide, endSentenceSide);
+		writeRule("-1", endSentence,
+				fReg.getDefaultGlueStartOrEndFeatures(), out);
 	}
 
-	private List<Set<Text>> generateQueries(String testFileName,
+	private List<Set<WritableArrayBuffer>> generateQueries(String testFileName,
 			CLI.RuleRetrieverParameters params) throws IOException {
 		PatternInstanceCreator patternInstanceCreator = new PatternInstanceCreator(
 				params, filter.getPermittedSourcePatterns());
-		List<Set<Text>> queries = new ArrayList<>(readers.length);
+		List<Set<WritableArrayBuffer>> queries = new ArrayList<>(readers.length);
 		for (int i = 0; i < readers.length; ++i) {
-			queries.add(new HashSet<Text>());
+			queries.add(new HashSet<WritableArrayBuffer>());
 		}
 		try (BufferedReader reader = new BufferedReader(new FileReader(
 				testFileName))) {
@@ -278,12 +283,12 @@ public class RuleRetriever {
 				stopWatch.start();
 				Set<Rule> rules = patternInstanceCreator
 						.createSourcePatternInstances(line);
-				Collection<Text> sources = new ArrayList<>(rules.size());
+				Collection<WritableArrayBuffer> sources = new ArrayList<>(rules.size());
 				for (Rule rule : rules) {
-					Text source = (new RuleWritable(rule)).getSource();
+					WritableArrayBuffer source = rule.source();
 					sources.add(source);
 				}
-				for (Text source : sources) {
+				for (WritableArrayBuffer source : sources) {
 					if (filter.filterSource(source)) {
 						continue;
 					}
@@ -299,10 +304,10 @@ public class RuleRetriever {
 		return queries;
 	}
 
-	public static void writeRule(RuleWritable rule,
+	public static void writeRule(String LHS, Rule rule,
 			SortedMap<Integer, Double> processedFeatures, BufferedWriter out) {
 		StringBuilder res = new StringBuilder();
-		res.append(rule);
+		res.append(LHS).append(" ").append(rule);
 		for (int featureIndex : processedFeatures.keySet()) {
 			double featureValue = processedFeatures.get(featureIndex);
 			// one-based index
@@ -348,7 +353,7 @@ public class RuleRetriever {
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
 		System.err.println("Generating query");
-		List<Set<Text>> queries = retriever.generateQueries(params.testFile,
+		List<Set<WritableArrayBuffer>> queries = retriever.generateQueries(params.testFile,
 				params);
 		System.err.printf("Query took %d seconds to generate\n",
 				stopWatch.getTime() / 1000);
@@ -367,40 +372,36 @@ public class RuleRetriever {
 			threadPool.shutdown();
 			threadPool.awaitTermination(1, TimeUnit.DAYS);
 			// Add pass through rule not already found in query
-			for (RuleWritable passThroughRule : retriever.passThroughRules) {
+			for (Rule passThroughRule : retriever.passThroughRules) {
 				if (!retriever.foundPassThroughRules.contains(passThroughRule)) {
-					writeRule(passThroughRule,
+					writeRule(EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs(), passThroughRule,
 							retriever.fReg.getDefaultPassThroughRuleFeatures(),
 							out);
 				}
 			}
 			// Add Deletetion and OOV rules
-			RuleWritable deletionRuleWritable = new RuleWritable();
-			deletionRuleWritable.setLeftHandSide(new Text(
-					EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs()));
-			deletionRuleWritable.setTarget(new Text("0"));
-			RuleWritable oovRuleWritable = new RuleWritable();
-			oovRuleWritable.setLeftHandSide(new Text(
-					EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs()));
-			oovRuleWritable.setTarget(new Text(""));
-			for (Text source : retriever.testVocab) {
+			Rule deletionRuleWritable = new Rule();
+			WritableArrayBuffer zero = new WritableArrayBuffer();
+			zero.add(Symbol.deserialise(0));
+			deletionRuleWritable.setTarget(zero);
+			Rule oovRuleWritable = new Rule();
+			oovRuleWritable.setTarget(new WritableArrayBuffer());
+			for (WritableArrayBuffer source : retriever.testVocab) {
 				// Write deletion rule
 				if (retriever.foundTestVocab.contains(source)) {
 					deletionRuleWritable.setSource(source);
-					writeRule(deletionRuleWritable,
+					writeRule(EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs(), deletionRuleWritable,
 							retriever.fReg.getDefaultDeletionFeatures(), out);
 					// Otherwise is an OOV
 				} else {
 					oovRuleWritable.setSource(source);
-					writeRule(oovRuleWritable,
+					writeRule(EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs(), oovRuleWritable,
 							retriever.fReg.getDefaultOOVFeatures(), out);
 				}
 			}
 			// Glue rules
-			for (Pair<RuleWritable, SortedMap<Integer, Double>> glueRule : retriever
-					.getGlueRules()) {
-				writeRule(glueRule.getFirst(), glueRule.getSecond(), out);
-			}
+			retriever.writeGlueRules(out);
+		
 		}
 		System.out.println(retriever.foundPassThroughRules);
 		System.out.println(retriever.foundTestVocab);

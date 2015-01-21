@@ -4,12 +4,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import uk.ac.cam.eng.extraction.datatypes.Rule;
+import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.AlignmentCountMapWritable;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceCountMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.rule.features.Feature.ComputeLocation;
 
 /**
@@ -60,7 +59,7 @@ public final class FeatureFunctionRegistry {
 
 	private static Map<Feature, BiFunction<Rule, FeatureFunctionInputData, double[]>> featureFunctions = new HashMap<>();
 
-	static double[] computeFeature(Feature feature, RuleWritable rule,
+	static double[] computeFeature(Feature feature, Rule rule,
 			RuleData data, FeatureRegistry fReg) {
 		if (ComputeLocation.MAP_REDUCE == feature.computed) {
 			throw new UnsupportedOperationException(

@@ -22,8 +22,6 @@ package uk.ac.cam.eng.extraction.datatypes;
 import java.util.ArrayList;
 import java.util.List;
 
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
-
 /**
  * This class describes a phrasal or hierarchical rule
  * 
@@ -386,10 +384,6 @@ public final class Rule { // final because immutable class
 		}
 	}
 
-	public Rule(RuleWritable rw) {
-		this(rw.getLeftHandSide().toString(),rw.getSource().toString(), 
-				rw.getTarget().toString());
-	}
 	
 	public Rule(String lhs, String source, String target){
 		this.leftHandSide = Integer.parseInt(lhs);

@@ -7,9 +7,9 @@ package object extraction {
   type ASet = scala.collection.mutable.HashSet[Alignment]
   type RSet = scala.collection.mutable.HashSet[Rule]
   type RulePair = (Rule, Alignment)
-  
+
   object RuleTupleOrdering extends Ordering[RuleTuple] {
-    override def compare(t1 : RuleTuple, t2 : RuleTuple) = S2TOrdering.compare(t1._1,t2._1)
+    override def compare(t1: RuleTuple, t2: RuleTuple) = S2TOrdering.compare(t1._1, t2._1)
   }
 
 }

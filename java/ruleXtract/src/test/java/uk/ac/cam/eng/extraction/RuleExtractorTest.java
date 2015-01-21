@@ -30,8 +30,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -40,22 +43,21 @@ import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import uk.ac.cam.eng.extraction.datatypes.Alignment;
-import uk.ac.cam.eng.extraction.datatypes.AlignmentLink;
-import uk.ac.cam.eng.extraction.datatypes.Rule;
-import uk.ac.cam.eng.extraction.datatypes.SentencePair;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TextArrayWritable;
+import uk.ac.cam.eng.extraction.hadoop.features.phrase.Source2TargetJob;
+import uk.ac.cam.eng.extraction.hadoop.features.phrase.Target2SourceJob;
 import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.Pair;
 
 /**
- * @author jmp84
+ * @author aaw35
  *
  */
 public class RuleExtractorTest {
@@ -85,8 +87,12 @@ public class RuleExtractorTest {
 			}
 		}
 	}
+	
+	@AfterClass
+	public static void cleanUp() throws IOException{
+		folder.delete();
+	}
 
-	@Test
 	public void testExtraction() throws IOException {
 		try (SequenceFile.Reader reader = new SequenceFile.Reader(
 				FileSystem.get(conf), new Path(trainingDataFile.getPath()),
@@ -100,132 +106,52 @@ public class RuleExtractorTest {
 			}
 		}
 	}
-
-	private Map<Rule, Pair<Integer, Map<List<AlignmentLink>, Integer>>> getExpectedRules()
-			throws FileNotFoundException, IOException, URISyntaxException {
-		Map<Rule, Pair<Integer, Map<List<AlignmentLink>, Integer>>> res = new HashMap<>();
-		try (BufferedReader br = new BufferedReader(new InputStreamReader(
-				new FileInputStream(new File(getClass().getResource(
-						"/extractedRules.txt").toURI()))))) {
-			String line = null;
-			while ((line = br.readLine()) != null) {
-				String[] parts = line.split(" ");
-				if (parts.length != 4) {
-					throw new RuntimeException("Malformed rule: " + line);
-				}
-				int lhs = Integer.parseInt(parts[0]);
-				String[] sourceWords = parts[1].split("_");
-				String[] targetWords = parts[2].split("_");
-				List<Integer> sourceIds = new ArrayList<>();
-				List<Integer> targetIds = new ArrayList<>();
-				for (String sourceWord : sourceWords) {
-					sourceIds.add(Integer.parseInt(sourceWord));
-				}
-				for (String targetWord : targetWords) {
-					targetIds.add(Integer.parseInt(targetWord));
-				}
-				String[] alignmentLinks = parts[3].split("_");
-				List<AlignmentLink> alignment = new ArrayList<>();
-				for (String alignmentLink : alignmentLinks) {
-					String[] srcTrg = alignmentLink.split("-");
-					if (srcTrg.length != 2) {
-						throw new RuntimeException(
-								"Malformed rule (alignment): " + line);
-					}
-					alignment.add(new AlignmentLink(
-							Integer.parseInt(srcTrg[0]), Integer
-									.parseInt(srcTrg[1])));
-				}
-				Rule r = new Rule(lhs, sourceIds, targetIds);
-				if (!res.containsKey(r)) {
-					Map<List<AlignmentLink>, Integer> alignments = new HashMap<>();
-					alignments.put(alignment, 1);
-					res.put(r, new Pair<>(1, alignments));
-				} else {
-					Pair<Integer, Map<List<AlignmentLink>, Integer>> countAlignments = res
-							.get(r);
-					countAlignments.setFirst(countAlignments.getFirst() + 1);
-					Map<List<AlignmentLink>, Integer> alignments = countAlignments
-							.getSecond();
-					if (!alignments.containsKey(alignment)) {
-						alignments.put(alignment, 1);
-					} else {
-						alignments
-								.put(alignment, alignments.get(alignment) + 1);
-					}
-				}
+	
+	private boolean isContigious(List<Rule> rules, Function<Rule, List<Symbol>> getStr){
+		Set<List<Symbol>> prevs = new HashSet<>();
+		List<Symbol> prev = getStr.apply(rules.get(0));
+		prevs.add(prev);
+		for(Rule rule : rules){
+			List<Symbol> str = getStr.apply(rule);
+			if(!(str.equals(prev) || prevs.add(str))){
+				return false;
 			}
+			prev = str;
 		}
-		return res;
+		return true;
 	}
 
-	private Map<Rule, Pair<Integer, Map<List<AlignmentLink>, Integer>>> getActualRules(
-			List<Rule> extractedRules) {
-		Map<Rule, Pair<Integer, Map<List<AlignmentLink>, Integer>>> res = new HashMap<>();
-		for (Rule r : extractedRules) {
-			List<AlignmentLink> alignment = r.getAlignment();
-			if (!res.containsKey(r)) {
-				Map<List<AlignmentLink>, Integer> alignments = new HashMap<>();
-				alignments.put(alignment, 1);
-				res.put(r, new Pair<>(1, alignments));
-			} else {
-				Pair<Integer, Map<List<AlignmentLink>, Integer>> countAlignments = res
-						.get(r);
-				countAlignments.setFirst(countAlignments.getFirst() + 1);
-				Map<List<AlignmentLink>, Integer> alignments = countAlignments
-						.getSecond();
-				if (!alignments.containsKey(alignment)) {
-					alignments.put(alignment, 1);
-				} else {
-					alignments.put(alignment, alignments.get(alignment) + 1);
-				}
-			}
-		}
-		return res;
-	}
-
-	/**
-	 * Test method for
-	 * {@link uk.ac.cam.eng.extraction.RuleExtractor#extract(uk.ac.cam.eng.extraction.datatypes.Alignment, uk.ac.cam.eng.extraction.datatypes.SentencePair)}
-	 * .
-	 * 
-	 * @throws URISyntaxException
-	 * @throws IOException
-	 * @throws FileNotFoundException
-	 */
-
+	@SuppressWarnings("unchecked")
 	@Test
-	public final void testExtract() throws FileNotFoundException, IOException,
-			URISyntaxException {
-		SentencePair sentencePair = new SentencePair(
-				"45187 82073 15 22 28500 18 2575 31846 3 102 25017 133794 19 21379 5 566 957608 3532 5 26635 155153 725236 4",
-				"5023 8107 12 11 1547 14 205 55755 25 12 1226 22 11 36053 26 158559 16746 53 6119 9 3 16497 14412 115 10105 113 6 3 2904 514343 16497 5");
-		Alignment alignment = new Alignment(
-				"0-0 1-1 2-2 3-2 3-3 4-4 5-5 6-6 7-7 9-8 10-9 11-10 15-11 10-13 16-13 16-14 11-15 16-15 11-16 12-17 13-18 14-19 15-21 16-21 16-22 16-23 19-24 20-28 16-29 17-29 21-29 21-30 22-31",
-				sentencePair);
-		Configuration conf = new Configuration();
-		conf.setInt(CLI.RuleParameters.MAX_SOURCE_PHRASE, 9);
-		conf.setInt(CLI.RuleParameters.MAX_SOURCE_ELEMENTS, 5);
-		conf.setInt(CLI.RuleParameters.MAX_TERMINAL_LENGTH, 5);
-		conf.setInt(CLI.RuleParameters.MAX_NONTERMINAL_SPAN, 10);
-		conf.setBoolean(CLI.ExtractorJobParameters.REMOVE_MONOTONIC_REPEATS,
-				true);
-		RuleExtractor ruleExtractor = new RuleExtractor(conf);
-		List<Rule> extractedRules = ruleExtractor.extract(alignment,
-				sentencePair);
-		Object[] strings = ruleExtractor
-				.extract(alignment, sentencePair)
-				.stream()
-				.map(x -> x.toString().replace("-1", "X").replace("-2", "X1")
-						.replace("-3", "X2")).toArray();
-		// .filter(x -> !(x.contains("-2") || x.contains("-3"))).toArray();
-		Arrays.sort(strings);
-		for (Object s : strings) {
-			System.out.println(s);
+	public void testRuleComparator() throws IOException {
+		try (SequenceFile.Reader reader = new SequenceFile.Reader(
+				FileSystem.get(conf), new Path(trainingDataFile.getPath()),
+				conf)) {
+			MapWritable key = new MapWritable();
+			TextArrayWritable val = new TextArrayWritable();
+			List<Rule> rules = new ArrayList<>();
+			ExtractOptions opts = new ExtractOptions(9, 5, 5, 10, true);
+			int count = 0;
+			while (reader.next(key, val) && count < 1000) {
+				String src = val.get()[0].toString();
+				String trg = val.get()[1].toString();
+				String a = val.get()[2].toString();
+				List<Pair<Rule, Alignment>> extracted = Extract.extractJava(opts, src, trg, a);
+				for(Pair<Rule, Alignment> pair : extracted){
+					rules.add(pair.getFirst());
+				}
+				++count; 
+			}
+			Assert.assertEquals(472100, rules.size());
+			Assert.assertFalse(isContigious(rules, r -> r.getSource()));
+			rules.sort(new Source2TargetJob.Source2TargetComparator());
+			Assert.assertTrue(isContigious(rules, r -> r.getSource()));
+			rules.sort(new Target2SourceJob.Target2SourceComparator());
+			Assert.assertTrue(isContigious(rules, r -> r.getTarget()));
 		}
-		Map<Rule, Pair<Integer, Map<List<AlignmentLink>, Integer>>> actualRules = getActualRules(extractedRules);
-		Map<Rule, Pair<Integer, Map<List<AlignmentLink>, Integer>>> expectedRules = getExpectedRules();
-		Assert.assertEquals(expectedRules, actualRules);
 	}
+
+
+
 
 }

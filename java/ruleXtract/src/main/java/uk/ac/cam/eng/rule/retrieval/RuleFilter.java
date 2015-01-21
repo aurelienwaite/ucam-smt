@@ -40,9 +40,10 @@ import org.apache.hadoop.io.ByteWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 
+import uk.ac.cam.eng.extraction.WritableArrayBuffer;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.IntWritableCache;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
+import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.rule.features.Feature;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
 import uk.ac.cam.eng.util.CLI;
@@ -58,7 +59,7 @@ import uk.ac.cam.eng.util.Pair;
 class RuleFilter {
 
 	private static class RuleCountComparator implements
-			Comparator<Pair<RuleWritable, RuleData>> {
+			Comparator<Pair<Rule, RuleData>> {
 
 		private final ByteWritable countIndex;
 
@@ -66,8 +67,8 @@ class RuleFilter {
 			this.countIndex = new ByteWritable((byte) countIndex);
 		}
 
-		public int compare(Pair<RuleWritable, RuleData> a,
-				Pair<RuleWritable, RuleData> b) {
+		public int compare(Pair<Rule, RuleData> a,
+				Pair<Rule, RuleData> b) {
 			int aValue = a.getSecond().getProvCounts().containsKey(countIndex) ? a
 					.getSecond().getProvCounts().get(countIndex).get()
 					: 0;
@@ -142,8 +143,8 @@ class RuleFilter {
 		}
 	}
 
-	public boolean filterSource(Text source) {
-		SidePattern sourcePattern = SidePattern.getPattern(source.toString());
+	public boolean filterSource(WritableArrayBuffer source) {
+		SidePattern sourcePattern = source.toPattern();
 		if (sourcePattern.isPhrase()) {
 			return false;
 		} else if (sourcePatternConstraints.containsKey(sourcePattern)) {
@@ -152,10 +153,10 @@ class RuleFilter {
 		return true;
 	}
 
-	private Map<RuleWritable, RuleData> filterRulesBySource(
+	private Map<Rule, RuleData> filterRulesBySource(
 			SidePattern sourcePattern,
-			List<Pair<RuleWritable, RuleData>> rules, int provMapping) {
-		Map<RuleWritable, RuleData> results = new HashMap<>();
+			List<Pair<Rule, RuleData>> rules, int provMapping) {
+		Map<Rule, RuleData> results = new HashMap<>();
 		// If the source side is a phrase, then we want everything
 		if (sourcePattern.isPhrase()) {
 			rules.forEach(entry -> results.put(entry.getFirst(),
@@ -168,12 +169,11 @@ class RuleFilter {
 		int prevCount = -1;
 		double nTransConstraint = sourcePatternConstraints.get(sourcePattern).nTrans;
 		ByteWritable countIndex = new ByteWritable((byte) provMapping);
-		for (Pair<RuleWritable, RuleData> entry : rules) {
+		for (Pair<Rule, RuleData> entry : rules) {
 			// number of translations per source threshold
 			// in case of ties we either keep or don't keep the ties
 			// depending on the config
-			RulePattern rulePattern = RulePattern.getPattern(entry.getFirst(),
-					entry.getFirst());
+			RulePattern rulePattern = RulePattern.getPattern(entry.getFirst());
 			int count = (int) entry.getSecond().getProvCounts().get(countIndex)
 					.get();
 			boolean notTied = count != prevCount;
@@ -205,7 +205,7 @@ class RuleFilter {
 	 * @return
 	 */
 	private boolean filterRule(Feature s2t, Feature t2s,
-			SidePattern sourcePattern, RuleWritable rule, RuleData data,
+			SidePattern sourcePattern, Rule rule, RuleData data,
 			int provMapping) {
 		IntWritable provIW = IntWritableCache.createIntWritable(provMapping);
 		// Immediately filter if there is data for this rule under this
@@ -213,7 +213,7 @@ class RuleFilter {
 		if (!data.getFeatures().get(s2t).containsKey(provIW)) {
 			return true;
 		}
-		RulePattern rulePattern = RulePattern.getPattern(rule, rule);
+		RulePattern rulePattern = RulePattern.getPattern(rule);
 		if (!(sourcePattern.isPhrase() || allowedPatterns.contains(rulePattern))) {
 			return true;
 		}
@@ -251,33 +251,33 @@ class RuleFilter {
 		return false;
 	}
 
-	public Map<RuleWritable, RuleData> filter(SidePattern sourcePattern,
-			List<Pair<RuleWritable, RuleData>> toFilter) {
+	public Map<Rule, RuleData> filter(SidePattern sourcePattern,
+			List<Pair<Rule, RuleData>> toFilter) {
 		// Establish the provenances used in these rules
 		Set<Integer> provenances = new HashSet<>();
 		if (!provenanceUnion) {
 			provenances.add(0);
 		} else {
-			for (Pair<RuleWritable, RuleData> entry : toFilter) {
+			for (Pair<Rule, RuleData> entry : toFilter) {
 				for (ByteWritable prov : entry.getSecond().getProvCounts()
 						.keySet()) {
 					provenances.add((int) prov.get());
 				}
 			}
 		}
-		Map<RuleWritable, RuleData> filtered = new HashMap<>();
+		Map<Rule, RuleData> filtered = new HashMap<>();
 		for (int i : provenances) {
 			Feature s2t = i == 0 ? Feature.SOURCE2TARGET_PROBABILITY
 					: Feature.PROVENANCE_SOURCE2TARGET_PROBABILITY;
 			Feature t2s = i == 0 ? Feature.TARGET2SOURCE_PROBABILITY
 					: Feature.PROVENANCE_TARGET2SOURCE_PROBABILITY;
-			List<Pair<RuleWritable, RuleData>> rules = new LinkedList<>();
+			List<Pair<Rule, RuleData>> rules = new LinkedList<>();
 			Collections.sort(toFilter, new RuleCountComparator(i));
-			for (Pair<RuleWritable, RuleData> entry : toFilter) {
-				RuleWritable rule = entry.getFirst();
+			for (Pair<Rule, RuleData> entry : toFilter) {
+				Rule rule = entry.getFirst();
 				RuleData data = entry.getSecond();
 				if (!filterRule(s2t, t2s, sourcePattern, rule, data, i)) {
-					rules.add(Pair.createPair(new RuleWritable(rule), data));
+					rules.add(Pair.createPair(new Rule(rule), data));
 				}
 			}
 			filtered.putAll(filterRulesBySource(sourcePattern, rules, i));

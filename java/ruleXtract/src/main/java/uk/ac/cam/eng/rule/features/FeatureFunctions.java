@@ -2,7 +2,8 @@ package uk.ac.cam.eng.rule.features;
 
 import org.apache.hadoop.io.ByteWritable;
 
-import uk.ac.cam.eng.extraction.datatypes.Rule;
+import uk.ac.cam.eng.extraction.Rule;
+import uk.ac.cam.eng.extraction.Terminal;
 import uk.ac.cam.eng.rule.features.FeatureFunctionRegistry.FeatureFunctionInputData;
 
 public final class FeatureFunctions {
@@ -15,17 +16,6 @@ public final class FeatureFunctions {
 
 	private static final ByteWritable zeroIndex = new ByteWritable((byte) 0);
 
-	static double[] insertScale(Rule r) {
-		// deletion rule
-		if (r.getTargetWords().size() == 1 && r.getTargetWords().get(0) == 0) {
-			return minusOne;
-		}
-		// oov rule
-		else if (r.getTargetWords().size() == 0) {
-			return minusOne;
-		}
-		return empty;
-	}
 
 	static double[] ruleCount1(Rule r, FeatureFunctionInputData data) {
 		// 0 element is count over the entire data
@@ -58,7 +48,7 @@ public final class FeatureFunctions {
 	}
 
 	static double[] noOfWords(Rule r, FeatureFunctionInputData data) {
-		return new double[]{r.nbTargetWords()};
+		return new double[]{r.target().getWords()};
 	}
 
 }

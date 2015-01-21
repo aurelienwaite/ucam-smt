@@ -15,12 +15,12 @@
  *******************************************************************************/
 package uk.ac.cam.eng.extraction.hadoop.merge;
 
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 
+import uk.ac.cam.eng.extraction.Rule;
+import uk.ac.cam.eng.extraction.WritableArrayBuffer;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 
 /**
  * 
@@ -28,14 +28,14 @@ import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
  * @date 28 May 2014
  */
 class MergePartitioner extends
-		Partitioner<RuleWritable, RuleData> {
+		Partitioner<Rule, RuleData> {
 
-	private Partitioner<Text, RuleData> defaultPartitioner = new HashPartitioner<>();
-
+	private Partitioner<WritableArrayBuffer, RuleData> defaultPartitioner = new HashPartitioner<>();
+	
 	@Override
-	public int getPartition(RuleWritable key, RuleData value,
+	public int getPartition(Rule key, RuleData value,
 			int numPartitions) {
-		return defaultPartitioner.getPartition(key.getSource(), value,
+		return defaultPartitioner.getPartition(key.source(), value,
 				numPartitions);
 	}
 

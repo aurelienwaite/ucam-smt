@@ -38,17 +38,16 @@ import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
-import uk.ac.cam.eng.extraction.RuleExtractor;
-import uk.ac.cam.eng.extraction.datatypes.Alignment;
-import uk.ac.cam.eng.extraction.datatypes.Rule;
-import uk.ac.cam.eng.extraction.datatypes.SentencePair;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.AlignmentWritable;
+import uk.ac.cam.eng.extraction.Alignment;
+import uk.ac.cam.eng.extraction.Extract;
+import uk.ac.cam.eng.extraction.ExtractOptions;
+import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ExtractedData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TextArrayWritable;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.CLI.Provenance;
+import uk.ac.cam.eng.util.Pair;
 
 import com.beust.jcommander.ParameterException;
 
@@ -71,9 +70,9 @@ public class ExtractorJob extends Configured implements Tool {
 		conf.set("mapred.reduce.child.java.opts", "-Xmx4096m");
 		Job job = new Job(conf, "Rule extraction");
 		job.setJarByClass(ExtractorJob.class);
-		job.setMapOutputKeyClass(RuleWritable.class);
+		job.setMapOutputKeyClass(Rule.class);
 		job.setMapOutputValueClass(ExtractedData.class);
-		job.setOutputKeyClass(RuleWritable.class);
+		job.setOutputKeyClass(Rule.class);
 		job.setOutputValueClass(ExtractedData.class);
 		job.setMapperClass(ExtractorMapper.class);
 		job.setReducerClass(ExtractorReducer.class);
@@ -92,7 +91,7 @@ public class ExtractorJob extends Configured implements Tool {
 	 * features.
 	 */
 	private static class ExtractorMapper extends
-			Mapper<MapWritable, TextArrayWritable, RuleWritable, ExtractedData> {
+			Mapper<MapWritable, TextArrayWritable, Rule, ExtractedData> {
 
 		private static final IntWritable ONE = new IntWritable(1);
 
@@ -133,12 +132,17 @@ public class ExtractorJob extends Configured implements Tool {
 			String sourceSentence = ((Text) value.get()[0]).toString();
 			String targetSentence = ((Text) value.get()[1]).toString();
 			String wordAlign = ((Text) value.get()[2]).toString();
-			SentencePair sp = new SentencePair(sourceSentence, targetSentence);
-			Alignment a = new Alignment(wordAlign, sp);
-			RuleExtractor re = new RuleExtractor(conf);
-			for (Rule r : re.extract(a, sp)) {
-				RuleWritable rw = new RuleWritable(r);
-				AlignmentWritable aw = new AlignmentWritable(r.getAlignment());
+
+			int maxSourcePhrase = conf.getInt(CLI.RuleParameters.MAX_SOURCE_PHRASE,-1);
+			int maxSourceElements = conf.getInt(CLI.RuleParameters.MAX_SOURCE_ELEMENTS, -1);
+			int maxTerminalLength = conf.getInt(CLI.RuleParameters.MAX_TERMINAL_LENGTH, -1);
+			int maxNonTerminalSpan = conf.getInt(CLI.RuleParameters.MAX_NONTERMINAL_SPAN, -1);
+			boolean removeMonotonicRepeats = conf.getBoolean(CLI.ExtractorJobParameters.REMOVE_MONOTONIC_REPEATS,
+					false);
+			ExtractOptions opts = new ExtractOptions(maxSourcePhrase, maxSourceElements, maxTerminalLength, 
+					maxNonTerminalSpan, removeMonotonicRepeats);
+			
+			for (Pair<Rule, Alignment> ra : Extract.extractJava(opts, sourceSentence, targetSentence, wordAlign)) {
 				ruleInfo.clear();
 				ruleInfo.putProvenanceCount(ALL, ONE);
 				for (Writable prov : key.keySet()) {
@@ -146,19 +150,19 @@ public class ExtractorJob extends Configured implements Tool {
 						ruleInfo.putProvenanceCount(prov2Id.get(prov), ONE);
 					}
 				}
-				ruleInfo.putAlignmentCount(aw, 1);
-				context.write(rw, ruleInfo);
+				ruleInfo.putAlignmentCount(ra.getSecond(), 1);
+				context.write(ra.getFirst(), ruleInfo);
 			}
 		}
 	}
 
 	private static class ExtractorReducer extends
-			Reducer<RuleWritable, ExtractedData, RuleWritable, ExtractedData> {
+			Reducer<Rule, ExtractedData, Rule, ExtractedData> {
 
 		private ExtractedData compressed = new ExtractedData();
 
 		@Override
-		protected void reduce(RuleWritable key, Iterable<ExtractedData> values,
+		protected void reduce(Rule key, Iterable<ExtractedData> values,
 				Context context) throws IOException, InterruptedException {
 			compressed.clear();
 			for (ExtractedData value : values) {

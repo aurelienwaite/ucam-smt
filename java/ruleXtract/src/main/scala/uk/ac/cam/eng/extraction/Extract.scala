@@ -1,36 +1,35 @@
 package uk.ac.cam.eng.extraction
 
-import scala.collection.mutable.ListBuffer
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.immutable.HashMap
-import scala.annotation.tailrec
-import scala.collection.immutable.HashSet
-import scala.collection.immutable.Stream
+import scala.collection.mutable.Buffer
+import scala.collection.mutable.ListBuffer
+import collection.JavaConversions._
+import uk.ac.cam.eng.util.Pair
 
-case class ExtractOptions(maxSourcePhrase: Int, maxSourceElements: Int, maxTerminalLength: Int, maxNonTerminalSpan: Int, removeMonotoniceRepeats: Boolean)
+case class ExtractOptions(maxSourcePhrase: Int, maxSourceElements: Int, maxTerminalLength: Int, maxNonTerminalSpan: Int, removeMonotonicRepeats: Boolean)
 
 object Extract {
 
   def toSymbols(s: String): Vector[Symbol] = {
-    s.split(" ").map(x => new Terminal(x.toInt)).toVector
+    s.split(" ").map(x => Terminal.create(x.toInt)).toVector
   }
 
   def splitPhrasePairs(results: Seq[(Span, Span)], a: Alignment, options: ExtractOptions): (Seq[(Span, Span)], Seq[(Span, Span)], Seq[(Span, Span)]) = {
-    val parentPhrases = new ListBuffer[(Span, Span)]
-    val childPhrases = new ListBuffer[(Span, Span)]
-    val otherPhrases = new ListBuffer[(Span, Span)]
+    val parentPhrases = new ArrayBuffer[(Span, Span)]
+    val childPhrases = new ArrayBuffer[(Span, Span)]
+    val otherPhrases = new ArrayBuffer[(Span, Span)]
     for (pair <- results) {
       pair match {
         case (srcSpan, trgSpan) => {
           val isStart = srcSpan.start == 0
-          if (a.isSourceAligned(srcSpan.end) && (!isStart || (isStart && a.isSourceAligned(0))) &&
+          if ((!isStart || (isStart && a.isSourceAligned(0))) &&
             a.isTargetAligned(trgSpan.end) && a.isTargetAligned(trgSpan.start)) {
             parentPhrases += pair
             var srcAligned = true
             for (i <- srcSpan.start to srcSpan.end if srcAligned) {
               srcAligned &= a.isSourceAligned(i)
             }
-            if (srcAligned && srcSpan.end - srcSpan.start +1 <= options.maxNonTerminalSpan) {
+            if (srcAligned && srcSpan.end - srcSpan.start + 1 <= options.maxNonTerminalSpan) {
               childPhrases += pair
             }
           } else {
@@ -83,15 +82,11 @@ object Extract {
             results += tuple
           }
         }
-
       }
     }
     return splitPhrasePairs(results, alignment, options)
   }
 
-  /**
-   * Note the target spans of the tuples from this function are not set!
-   */
   private def extendUnalignedWords(senAlignment: Alignment,
                                    trgSpan: Span, span: Span, trgLength: Int): List[(Span, Span)] = {
     val extendedPrev = new ListBuffer[(Span, Span)]()
@@ -115,158 +110,143 @@ object Extract {
     (extendedPrev ++ results).toList
   }
 
-  def filterPassNonTerminalRule(opts: ExtractOptions)(toFilter: (Span, Span)): Boolean = {
+  def createTwoNTSpan(oneNT: OneNTSpan, other: Span): TwoNTSpan =
+    if (other.start < oneNT.startX)
+      TwoNTSpan(oneNT.start, oneNT.end, other.start, other.end, oneNT.startX, oneNT.endX)
+    else
+      TwoNTSpan(oneNT.start, oneNT.end, oneNT.startX, oneNT.endX, other.start, other.end)
+
+  def filterPassNonTerminalRule(opts: ExtractOptions, toFilter: Span): Boolean = {
     val (terminalLength, sourceElements) = toFilter match {
-      case (srcSpan: OneNTSpan, _) => {
-        val terminalLength = srcSpan.startX - srcSpan.start + srcSpan.end - srcSpan.endX
+      case toFilter: OneNTSpan => {
+        val terminalLength = toFilter.startX - toFilter.start + toFilter.end - toFilter.endX
         (terminalLength, terminalLength + 1)
       }
-      case (srcSpan: TwoNTSpan, _) => {
-        val terminalLength = srcSpan.startX - srcSpan.start + srcSpan.startX2-1 - srcSpan.endX +
-          srcSpan.end - srcSpan.endX2
+      case (toFilter: TwoNTSpan) => {
+        val terminalLength = toFilter.startX - toFilter.start + toFilter.startX2 - 1 - toFilter.endX +
+          toFilter.end - toFilter.endX2
         (terminalLength, terminalLength + 2)
       }
+      case _ => throw new UnsupportedOperationException("Can only filter rules")
     }
     return sourceElements <= opts.maxSourceElements && terminalLength <= opts.maxTerminalLength
   }
 
   def constituent(parent: (Span, Span), child: (Span, Span), options: ExtractOptions): Boolean = {
-    child match {
-      case (cSrcSpan, cTrgSpan) => {
-        parent match {
-          case (pSrcSpan: PhraseSpan, pTrgSpan: PhraseSpan) => {
-            val notSameSpan = (pSrcSpan.start != cSrcSpan.start || pSrcSpan.end != cSrcSpan.end) &&
-              (pTrgSpan.start != cTrgSpan.start || pTrgSpan.end != cTrgSpan.end)
-            val inRange = cSrcSpan.start >= pSrcSpan.start && cSrcSpan.end <= pSrcSpan.end
-            notSameSpan && inRange
-
-          }
-          case (pSrcSpan: OneNTSpan, pTrgSpan: OneNTSpan) => {
-            val inRange = (cSrcSpan.start >= pSrcSpan.start && cSrcSpan.end < pSrcSpan.startX) ||
-              (cSrcSpan.start > pSrcSpan.endX && cSrcSpan.end <= pSrcSpan.end)
-            val isMonotonicRepeat = options.removeMonotoniceRepeats &&
-              (cSrcSpan.end + 1 == pSrcSpan.startX || cSrcSpan.start - 1 == pSrcSpan.endX ||
-                  cTrgSpan.end + 1 == pTrgSpan.startX || cTrgSpan.start - 1 == pTrgSpan.endX)
-            inRange && !isMonotonicRepeat
-          }
-          case _ => false
-        }
+    val (cSrcSpan, cTrgSpan) = child
+    val (pSrcSpan, pTrgSpan) = parent
+    val inRange = cSrcSpan.start >= pSrcSpan.start && cSrcSpan.end <= pSrcSpan.end
+    parent match {
+      case (pSrcSpan: OneNTSpan, pTrgSpan: OneNTSpan) => {
+        val inRangeNT = inRange & (cSrcSpan.end < pSrcSpan.startX || cSrcSpan.start > pSrcSpan.endX)
+        val hasConsecutiveNT = 
+          (cSrcSpan.end + 1 == pSrcSpan.startX || pSrcSpan.endX + 1 == cSrcSpan.start ||
+            cTrgSpan.end + 1 == pTrgSpan.startX || pTrgSpan.endX + 1 == cTrgSpan.start)
+        inRangeNT && !hasConsecutiveNT
+      }
+      case _ => {
+        val notSameSpan = (pSrcSpan.start != cSrcSpan.start || pSrcSpan.end != cSrcSpan.end) &&
+          (pTrgSpan.start != cTrgSpan.start || pTrgSpan.end != cTrgSpan.end)
+        notSameSpan && inRange
       }
     }
   }
 
-  def deduperKey(srcSpan: Span): Span = {
-    srcSpan match {
-      case srcSpan: OneNTSpan => {
-        if (srcSpan.start == srcSpan.startX)
-          new OneNTSpan(srcSpan.endX, srcSpan.end, srcSpan.endX, srcSpan.endX)
-        else if (srcSpan.end == srcSpan.endX)
-          new OneNTSpan(srcSpan.start, srcSpan.startX, srcSpan.startX, srcSpan.startX)
-        else
-          srcSpan
-      }
-      case srcSpan: TwoNTSpan => {
-        if (srcSpan.start == srcSpan.startX && srcSpan.end == srcSpan.endX2) {
-          TwoNTSpan(srcSpan.endX, srcSpan.startX2, srcSpan.endX, 
-              srcSpan.endX,srcSpan.startX2, srcSpan.startX2)
-        }else
-          srcSpan
-      }
-      case _ => new PhraseSpan(-1, -1)
-    }
+  def deduperKey(srcSpan: OneNTSpan): (OneNTSpan, Boolean) =
+    if (srcSpan.start == srcSpan.startX)
+      Tuple2(OneNTSpan(srcSpan.endX, srcSpan.end, srcSpan.endX, srcSpan.endX), true)
+    else if (srcSpan.end == srcSpan.endX)
+      Tuple2(OneNTSpan(srcSpan.start, srcSpan.startX, srcSpan.startX, srcSpan.startX), true)
+    else
+      (srcSpan, false)
 
-  }
+  def deduperKey(srcSpan: TwoNTSpan): (TwoNTSpan, Boolean) =
+    if (srcSpan.start == srcSpan.startX && srcSpan.end == srcSpan.endX2) {
+      Tuple2(TwoNTSpan(srcSpan.endX, srcSpan.startX2, srcSpan.endX,
+        srcSpan.endX, srcSpan.startX2, srcSpan.startX2), true)
+    } else
+      (srcSpan, false)
+
+  def add(opts: ExtractOptions, results: Buffer[(Span, Span)], srcSpan: Span, trgSpan: Span,
+          dedupe: Boolean, deduper: scala.collection.mutable.HashSet[Span]): Unit =
+    if (filterPassNonTerminalRule(opts, srcSpan) && (if (dedupe && opts.removeMonotonicRepeats) deduper add srcSpan else true))
+      results += Tuple2(srcSpan, trgSpan)
 
   def extractNT(children: Seq[(Span, Span)], toExtract: (Span, Span),
-                filterFunc: ((Span, Span)) => Boolean, options: ExtractOptions,
-                deduper: scala.collection.mutable.HashSet[Span]): Seq[(Span, Span)] = {
+                results: Buffer[(Span, Span)], options: ExtractOptions,
+                deduper: scala.collection.mutable.HashSet[Span]): Unit = {
     val constituentPhrases = children.filter(constituent(toExtract, _, options))
-    toExtract match {
-      case (pSrcSpan, pTrgSpan) => {
-        constituentPhrases.flatMap {
-          case (srcSpan, trgSpan) => {
-            val constituentSrc = pSrcSpan.createSpan(srcSpan)
-            val rule = (constituentSrc, pTrgSpan.createSpan(trgSpan))
-            val key = deduperKey(constituentSrc)
-            if (!deduper.contains(key) && filterFunc(rule)) {
-              deduper += key
-              List(rule)
-            } else
-              Nil
-          }
+    val (srcSpan, trgSpan) = toExtract
+    for (i <- 0 until constituentPhrases.size) {
+      val (srcOuter, trgOuter) = constituentPhrases(i)
+      val (src1NT, dedupe) =
+        deduperKey(OneNTSpan(srcSpan.start, srcSpan.end, srcOuter.start, srcOuter.end))
+      val trg1NT = OneNTSpan(trgSpan.start, trgSpan.end, trgOuter.start, trgOuter.end)
+      add(options, results, src1NT, trg1NT, dedupe, deduper)
+      for (j <- i + 1 until constituentPhrases.size) {
+        if (constituent((src1NT, trg1NT), constituentPhrases(j), options)) {
+          val (srcInner, trgInner) = constituentPhrases(j)
+          val (src2NT, dedupe) = deduperKey(createTwoNTSpan(src1NT, srcInner))
+          val trg2NT = createTwoNTSpan(trg1NT, trgInner)
+          add(options, results, src2NT, trg2NT, dedupe, deduper)
         }
       }
     }
   }
 
-  def extractNT(options: ExtractOptions, children: Seq[(Span, Span)], deduper: scala.collection.mutable.HashSet[Span])(toExtract: List[(Span, Span)], filterFunc: ((Span, Span)) => Boolean): Stream[Seq[(Span, Span)]] = {
-    toExtract match {
-      case Nil => Stream.Empty
-      case head :: tail => {
-        val NTs = extractNT(children, head, filterFunc, options, deduper)
-        Stream.cons(NTs, extractNT(options, children, deduper)(tail, filterFunc))
-      }
+  def extractNT(options: ExtractOptions, children: Seq[(Span, Span)],
+                deduper: scala.collection.mutable.HashSet[Span])(toExtract: Seq[(Span, Span)]): Seq[(Span, Span)] = {
+    val results = new ListBuffer[(Span, Span)]
+    for (parent <- toExtract) {
+      extractNT(children, parent, results, options, deduper)
     }
+    results
   }
 
   def transformSpan(source: Vector[Symbol], target: Vector[Symbol], alignment: Alignment, span: (Span, Span)): RulePair = {
     var phraseAlignment = alignment.extractPhraseAlignment(span)
     span match {
       case (src: PhraseSpan, trg: PhraseSpan) => {
-        val r = new Rule(new ArrayBuffer ++= source.slice(src.start, src.end + 1),
-          new ArrayBuffer ++= target.slice(trg.start, trg.end + 1))
+        val r = new Rule(new WritableArrayBuffer ++= source.slice(src.start, src.end + 1),
+          new WritableArrayBuffer ++= target.slice(trg.start, trg.end + 1))
         (r, phraseAlignment)
       }
       case (src: OneNTSpan, trg: OneNTSpan) => {
-        val srcString = new ArrayBuffer ++= source.slice(src.start, src.startX) +=
-          X ++= source.slice(src.endX + 1, src.end + 1)
-        val trgString = new ArrayBuffer ++= target.slice(trg.start, trg.startX) +=
-          X ++= target.slice(trg.endX + 1, trg.end + 1)
-        (new Rule(srcString, trgString), phraseAlignment)
+        val slicer = (symbols : Vector[Symbol], span : OneNTSpan) => new WritableArrayBuffer ++=
+           symbols.slice(span.start, span.startX) += X ++= symbols.slice(span.endX + 1, span.end + 1)
+        (new Rule(slicer(source, src), slicer(target, trg)), phraseAlignment)
       }
       case (src: TwoNTSpan, trg: TwoNTSpan) => {
-        val srcString = new ArrayBuffer ++= source.slice(src.start, src.startX) +=
-          X1 ++= source.slice(src.endX + 1, src.startX2) += X2 ++=
-          source.slice(src.endX2 + 1, src.end + 1)
-        val trgString = if (trg.startX < trg.startX2)
-          new ArrayBuffer ++= target.slice(trg.start, trg.startX) +=
-            X1 ++= target.slice(trg.endX + 1, trg.startX2) += X2 ++=
-            target.slice(trg.endX2 + 1, trg.end + 1)
-        else
-          new ArrayBuffer ++= target.slice(trg.start, trg.startX2) +=
+        val slicer = (symbols : Vector[Symbol], span : TwoNTSpan) => new WritableArrayBuffer ++= 
+          symbols.slice(span.start, span.startX) += X1 ++= symbols.slice(span.endX + 1, span.startX2) += X2 ++=
+          symbols.slice(span.endX2 + 1, span.end + 1)
+        val trgString = if (trg.startX < trg.startX2) slicer(target, trg)
+        else new WritableArrayBuffer ++= target.slice(trg.start, trg.startX2) +=
             X2 ++= target.slice(trg.endX2 + 1, trg.startX) += X1 ++=
             target.slice(trg.endX + 1, trg.end + 1)
-        (new Rule(srcString, trgString), phraseAlignment)
+        (new Rule(slicer(source, src), trgString), phraseAlignment)
       }
       case _ => throw new UnsupportedOperationException("Must use spans of the same type")
     }
   }
 
-  def spansToRules(source: Vector[Symbol], target: Vector[Symbol], alignment: Alignment, spans: Stream[(Span, Span)]): Stream[(RulePair)] = {
-    spans match {
-      case head #:: tail =>
-        Stream.cons(transformSpan(source, target, alignment, head), spansToRules(source, target, alignment, tail))
-      case Stream.Empty =>
-        Stream.Empty
-    }
-  }
-
-  def extract(options: ExtractOptions)(sourceString: String, targetString: String, alignmentString: String): Stream[RulePair] = {
+  def extract(options: ExtractOptions)(sourceString: String, targetString: String, alignmentString: String): Seq[RulePair] = {
     val source = toSymbols((sourceString))
     val target = toSymbols(targetString)
     val alignment = new Alignment(alignmentString)
     val (parents, children, other) = extractPhrasePairs(options)(source, target, alignment)
-    //println(children.map { _._1.toString }.toList.sorted.mkString("\n"))
-    //println(parents.map { _.toString }.toList.sorted.mkString("\n"))
     val deduper = new scala.collection.mutable.HashSet[Span]
     val extractor = extractNT(options, children, deduper)_
-    val rules1NT = extractor(parents.toList, _ => true).flatten
-    val rules2NT = extractor(rules1NT.toList, filterPassNonTerminalRule(options)_).flatten
-    //println(rules2NT.map { span => transformSpan(source, target, alignment, span).toString + span.toString }.toList.sorted.mkString("\n"))
+    val rules = extractor(parents)
     val phrases = (parents ++ other)
       .filter { case (srcSpan, _) => srcSpan.end - srcSpan.start + 1 <= options.maxSourcePhrase }
-    //println(rules1NT.map { span => transformSpan(source, target, alignment, span).toString + span.toString }.toList.sorted.mkString("\n"))
-    spansToRules(source, target, alignment, phrases.toStream #::: (rules1NT).filter(filterPassNonTerminalRule(options)_) #::: rules2NT)
+    (phrases ++ rules).map(transformSpan(source, target, alignment, _))
   }
-
+  
+  def extractJava(options: ExtractOptions)(sourceString: String, targetString: String, alignmentString: String): 
+    java.util.List[Pair[Rule, Alignment]] = 
+      extract(options)(sourceString, targetString, alignmentString).map { ra =>
+        val (r, a) = ra
+        new Pair(r, a)
+      }
 }

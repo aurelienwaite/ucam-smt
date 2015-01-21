@@ -41,7 +41,7 @@ object ExtractTest extends App {
 
     var count = 0
     var diffs = 0
-    for (i <- 0 until 18000) {
+    for (i <- 0 until 0) {
       reader.next(key, value)
     }
     val start = System.currentTimeMillis()
@@ -52,23 +52,28 @@ object ExtractTest extends App {
       val trg = strings(1)
       val align = strings(2)
       val newString = extract(src, trg, align).map { _ match { case (r, a) => "0 " + r.toString() } }.toList.sorted.mkString("\n")
+      //println(List(src, trg, align).mkString("\n"))
+      println(newString)
+      if (count > 1000) {
+        RuleExtractorTest.folder.delete()
+        System.exit(0)
+      }
 
       val oldResults: java.util.List[uk.ac.cam.eng.extraction.datatypes.Rule] = oldExtractor.extract(src, trg, align)
       val oldString = oldResults.asScala.map { _.toString().replace("-1", "X").replace("-2", "X1").replace("-3", "X2") }.toList.sorted.mkString("\n")
-
       //println(count, diffs)
       //val ignore = HashSet.empty ++ List(17,18,19,21)
       if (oldString != newString) { //&& !ignore.contains(count) && count > 26) {
-        println(List(src, trg, align).mkString("\n"))
-        println(newString)
-        println("--")
-        println(oldString)
-        RuleExtractorTest.folder.delete()
-        System.exit(0)
-        diffs  +=1
+        //println(List(src, trg, align).mkString("\n"))
+        //println(newString)
+        //println("--")
+        //println(oldString)
+        //RuleExtractorTest.folder.delete()
+        //System.exit(0)
+        diffs += 1
       }
     }
-    //println((System.currentTimeMillis() - start) / 1000)
+    println((System.currentTimeMillis() - start) / 1000)
     RuleExtractorTest.folder.delete()
   }
 

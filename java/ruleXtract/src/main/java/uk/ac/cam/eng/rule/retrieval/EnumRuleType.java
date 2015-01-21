@@ -15,7 +15,6 @@
  *******************************************************************************/
 package uk.ac.cam.eng.rule.retrieval;
 
-import org.apache.hadoop.io.Text;
 
 /**
  * 
@@ -26,12 +25,12 @@ public enum EnumRuleType {
 	EXTRACTED("0"), PASSTHROUGH_OOV_DELETE("-1"), GLUE("");
 
 	private EnumRuleType(String lhs) {
-		this.lhs = new Text(lhs);
+		this.lhs = lhs;
 	}
 
-	private final Text lhs;
+	private final String lhs;
 
-	public Text getLhs() {
-		return new Text(lhs);
+	public String getLhs() {
+		return lhs;
 	}
 }

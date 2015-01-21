@@ -29,10 +29,10 @@ import java.util.SortedMap;
 import org.apache.commons.lang.time.StopWatch;
 import org.apache.hadoop.hbase.util.BloomFilter;
 import org.apache.hadoop.io.DataOutputBuffer;
-import org.apache.hadoop.io.Text;
 
+import uk.ac.cam.eng.extraction.Rule;
+import uk.ac.cam.eng.extraction.WritableArrayBuffer;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.extraction.hadoop.features.lexical.TTableClient;
 import uk.ac.cam.eng.extraction.hadoop.merge.MergeComparator;
 import uk.ac.cam.eng.util.CLI;
@@ -53,7 +53,7 @@ class HFileRuleQuery implements Runnable {
 
 	private final BufferedWriter out;
 
-	private final Collection<Text> query;
+	private final Collection<WritableArrayBuffer> query;
 
 	private final RuleRetriever retriever;
 
@@ -61,12 +61,12 @@ class HFileRuleQuery implements Runnable {
 
 	private final TTableClient t2sClient;
 
-	private final Map<RuleWritable, RuleData> queue = new HashMap<>();
+	private final Map<Rule, RuleData> queue = new HashMap<>();
 
 	private DataOutputBuffer tempOut = new DataOutputBuffer();
 
 	public HFileRuleQuery(HFileRuleReader reader, BloomFilter bf,
-			BufferedWriter out, Collection<Text> query,
+			BufferedWriter out, Collection<WritableArrayBuffer> query,
 			RuleRetriever retriever, CLI.ServerParams params) {
 		this.reader = reader;
 		this.bf = bf;
@@ -86,23 +86,21 @@ class HFileRuleQuery implements Runnable {
 			s2tClient.queryRules(queue);
 			t2sClient.queryRules(queue);
 		}
-		for (Entry<RuleWritable, RuleData> entry : queue.entrySet()) {
-			RuleWritable rule = entry.getKey();
+		for (Entry<Rule, RuleData> entry : queue.entrySet()) {
+			Rule rule = entry.getKey();
 			RuleData rawFeatures = entry.getValue();
 			if (retriever.passThroughRules.contains(rule)) {
-				RuleWritable asciiRule = new RuleWritable(rule);
-				asciiRule.setLeftHandSide(new Text(
-						EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs()));
+				Rule asciiRule = new Rule(rule);
 				synchronized (retriever.foundPassThroughRules) {
 					retriever.foundPassThroughRules.add(asciiRule);
 				}
-				RuleRetriever.writeRule(rule, retriever.fReg
+				RuleRetriever.writeRule(EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs(), rule, retriever.fReg
 						.createFoundPassThroughRuleFeatures(rawFeatures
 								.getFeatures()), out);
 			} else {
 				SortedMap<Integer, Double> processed = retriever.fReg
 						.processFeatures(rule, rawFeatures);
-				RuleRetriever.writeRule(rule, processed, out);
+				RuleRetriever.writeRule(EnumRuleType.EXTRACTED.getLhs(), rule, processed, out);
 			}
 
 		}
@@ -112,7 +110,7 @@ class HFileRuleQuery implements Runnable {
 	@SuppressWarnings("unchecked")
 	@Override
 	public void run() {
-		List<Text> sortedQuery = new ArrayList<>(query);
+		List<WritableArrayBuffer> sortedQuery = new ArrayList<>(query);
 		query.clear();
 		StopWatch stopWatch = new StopWatch();
 		System.out.println("Sorting query");
@@ -123,10 +121,7 @@ class HFileRuleQuery implements Runnable {
 		stopWatch.reset();
 		stopWatch.start();
 		try {
-			for (Text source : sortedQuery) {
-				SidePattern sourcePattern = SidePattern.getPattern(source
-						.toString());
-
+			for (WritableArrayBuffer source : sortedQuery) {
 				tempOut.reset();
 				source.write(tempOut);
 				if (!bf.contains(tempOut.getData(), 0, tempOut.getLength(),
@@ -139,12 +134,12 @@ class HFileRuleQuery implements Runnable {
 							retriever.foundTestVocab.add(source);
 						}
 					}
-					List<Pair<RuleWritable, RuleData>> rules = new ArrayList<>();
-					for(Pair<RuleWritable, RuleData> entry : reader.getRulesForSource()){
-						rules.add(Pair.createPair(new RuleWritable(entry.getFirst()), new RuleData(entry.getSecond())));
+					List<Pair<Rule, RuleData>> rules = new ArrayList<>();
+					for(Pair<Rule, RuleData> entry : reader.getRulesForSource()){
+						rules.add(Pair.createPair(new Rule(entry.getFirst()), new RuleData(entry.getSecond())));
 					}
-					Map<RuleWritable, RuleData> filtered = retriever.filter
-							.filter(sourcePattern, rules);
+					Map<Rule, RuleData> filtered = retriever.filter
+							.filter(source.toPattern(), rules);
 					queue.putAll(filtered);
 					if (queue.size() > BATCH_SIZE) {
 						drainQueue();

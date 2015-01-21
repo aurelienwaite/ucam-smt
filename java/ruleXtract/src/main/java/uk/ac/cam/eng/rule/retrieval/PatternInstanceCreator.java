@@ -25,7 +25,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import uk.ac.cam.eng.extraction.datatypes.Rule;
+import uk.ac.cam.eng.extraction.Rule;
+import uk.ac.cam.eng.extraction.Symbol;
 import uk.ac.cam.eng.util.CLI;
 
 /**
@@ -73,11 +74,11 @@ class PatternInstanceCreator {
 		List<Integer> sourceSentence = new ArrayList<Integer>();
 		for (int i = 0; i < parts.length; i++) {
 			sourceSentence.add(Integer.parseInt(parts[i]));
-			List<Integer> sourcePhrase = new ArrayList<Integer>();
+			List<Symbol> sourcePhrase = new ArrayList<Symbol>();
 			for (int j = 0; j < maxSourcePhrase && j < parts.length - i; j++) {
-				sourcePhrase.add(Integer.parseInt(parts[i + j]));
+				sourcePhrase.add(Symbol.deserialise(Integer.parseInt(parts[i + j])));
 				// add source phrase
-				Rule r = new Rule(sourcePhrase, new ArrayList<Integer>());
+				Rule r = new Rule(sourcePhrase, new ArrayList<Symbol>());
 				res.add(r);
 			}
 		}
@@ -101,17 +102,17 @@ class PatternInstanceCreator {
 
 	private Set<Rule> merge(Rule partialLeft, Set<Rule> partialRight) {
 		Set<Rule> res = new HashSet<Rule>();
-		List<Integer> sourceLeft = partialLeft.getSource();
+		List<Symbol> sourceLeft = partialLeft.getSource();
 		if (partialRight.isEmpty()) {
-			res.add(new Rule(sourceLeft, new ArrayList<Integer>()));
+			res.add(new Rule(sourceLeft, new ArrayList<Symbol>()));
 			return res;
 		}
 		for (Rule r : partialRight) {
-			List<Integer> merged = new ArrayList<Integer>();
-			List<Integer> sourceRight = r.getSource();
+			List<Symbol> merged = new ArrayList<Symbol>();
+			List<Symbol> sourceRight = r.getSource();
 			merged.addAll(sourceLeft);
 			merged.addAll(sourceRight);
-			res.add(new Rule(merged, new ArrayList<Integer>()));
+			res.add(new Rule(merged, new ArrayList<Symbol>()));
 		}
 		return res;
 	}
@@ -149,29 +150,29 @@ class PatternInstanceCreator {
 			if (nbCoveredWords + sourceSentence.size() - startSentenceIndex > hrMaxHeight) {
 				return res;
 			}
-			List<Integer> patternInstance = new ArrayList<Integer>();
+			List<Symbol> patternInstance = new ArrayList<Symbol>();
 			for (int i = 0; i < sourceSentence.size() - startSentenceIndex; i++) {
 				if (sidePattern.get(startPatternIndex + i).equals("w")) {
-					patternInstance.add(sourceSentence.get(startSentenceIndex
-							+ i));
+					patternInstance.add(Symbol.deserialise(sourceSentence.get(startSentenceIndex
+							+ i)));
 				} else {
-					patternInstance.add(Integer.parseInt(sidePattern
-							.get(startPatternIndex + i)));
+					patternInstance.add(Symbol.deserialise(Integer.parseInt(sidePattern
+							.get(startPatternIndex + i))));
 				}
 			}
-			Rule r = new Rule(patternInstance, new ArrayList<Integer>());
+			Rule r = new Rule(patternInstance, new ArrayList<Symbol>());
 			res.add(r);
 			return res;
 		}
-		List<Integer> partialPattern = new ArrayList<Integer>();
+		List<Symbol> partialPattern = new ArrayList<Symbol>();
 		if (sidePattern.get(startPatternIndex).equals("w")) {
 			for (int i = startSentenceIndex; i < sourceSentence.size()
 					- (sidePattern.size() - startPatternIndex - 1)
 					&& i < startSentenceIndex + maxTerminalLength
 					&& i < startSentenceIndex + maxSourceElements - nbSrcElt
 					&& i < startSentenceIndex + hrMaxHeight - nbCoveredWords; i++) {
-				partialPattern.add(sourceSentence.get(i));
-				Rule r = new Rule(partialPattern, new ArrayList<Integer>());
+				partialPattern.add(Symbol.deserialise(sourceSentence.get(i)));
+				Rule r = new Rule(partialPattern, new ArrayList<Symbol>());
 				Set<Rule> right = getPatternInstancesFromSourceAndPattern2(
 						sourceSentence, sidePattern, i + 1,
 						startPatternIndex + 1, nbSrcElt + i
@@ -181,9 +182,9 @@ class PatternInstanceCreator {
 				res.addAll(merged);
 			}
 		} else {
-			partialPattern.add(Integer.parseInt(sidePattern
-					.get(startPatternIndex)));
-			Rule r = new Rule(partialPattern, new ArrayList<Integer>());
+			partialPattern.add(Symbol.deserialise(Integer.parseInt(sidePattern
+					.get(startPatternIndex))));
+			Rule r = new Rule(partialPattern, new ArrayList<Symbol>());
 			for (int i = startSentenceIndex; i < sourceSentence.size()
 					- (sidePattern.size() - startPatternIndex - 1)
 					&& i < startSentenceIndex + maxNonTerminalSpan

@@ -24,12 +24,14 @@ import java.util.HashMap;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.file.tfile.Utils;
 
+import uk.ac.cam.eng.extraction.Alignment;
+
 /**
  * @author Juan Pino
  * @date 14 July 2014
  */
 public class AlignmentCountMapWritable extends
-		HashMap<AlignmentWritable, Integer> implements Writable {
+		HashMap<Alignment, Integer> implements Writable {
 
 	private static final long serialVersionUID = 1L;
 	
@@ -38,7 +40,7 @@ public class AlignmentCountMapWritable extends
 
 		private static final long serialVersionUID = 1L;
 
-		public Integer put(AlignmentWritable key, Integer value) {
+		public Integer put(Alignment key, Integer value) {
 			throw new UnsupportedOperationException();
 		};
 	};
@@ -48,15 +50,15 @@ public class AlignmentCountMapWritable extends
 	}
 	
 	public AlignmentCountMapWritable(AlignmentCountMapWritable other){
-		for(Entry<AlignmentWritable, Integer> entry : other.entrySet()){
-			put(new AlignmentWritable(entry.getKey()), entry.getValue());
+		for(Entry<Alignment, Integer> entry : other.entrySet()){
+			put(new Alignment(entry.getKey()), entry.getValue());
 		}
 	}
 
 	public void increment(AlignmentCountMapWritable newCounts) {
-		for (Entry<AlignmentWritable, Integer> alignCount : newCounts
+		for (Entry<Alignment, Integer> alignCount : newCounts
 				.entrySet()) {
-			AlignmentWritable key = alignCount.getKey();
+			Alignment key = alignCount.getKey();
 			if (containsKey(key)) {
 				put(key, get(key) + newCounts.get(key));
 			} else {
@@ -82,7 +84,7 @@ public class AlignmentCountMapWritable extends
 	@Override
 	public void write(DataOutput out) throws IOException {
 		Utils.writeVInt(out, size());
-		for (AlignmentWritable a : keySet()) {
+		for (Alignment a : keySet()) {
 			a.write(out);
 			Utils.writeVInt(out, get(a));
 		}
@@ -98,7 +100,7 @@ public class AlignmentCountMapWritable extends
 		clear();
 		int size = Utils.readVInt(in);
 		for (int i = 0; i < size; ++i) {
-			AlignmentWritable a = new AlignmentWritable();
+			Alignment a = new Alignment();
 			a.readFields(in);
 			int alignmentCount = Utils.readVInt(in);
 			put(a, alignmentCount);

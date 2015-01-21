@@ -11,11 +11,11 @@ import java.util.TreeMap;
 
 import org.apache.hadoop.io.IntWritable;
 
+import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceProbMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.IntWritableCache;
+import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceProbMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 
 public class FeatureRegistry {
 
@@ -287,7 +287,7 @@ public class FeatureRegistry {
 		}
 	}
 
-	public SortedMap<Integer, Double> processFeatures(RuleWritable rule,
+	public SortedMap<Integer, Double> processFeatures(Rule rule,
 			RuleData data) {
 		SortedMap<Integer, Double> processedFeatures = getDefaultFeatures();
 		for (Feature f : allFeatures) {

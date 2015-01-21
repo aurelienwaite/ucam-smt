@@ -28,9 +28,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceProbMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleWritable;
 import uk.ac.cam.eng.rule.features.Feature;
 import uk.ac.cam.eng.util.CLI;
 
@@ -105,10 +105,10 @@ public class TTableClient {
 	}
 
 	public void queryRules(
-			Map<RuleWritable, RuleData> rules)
+			Map<Rule, RuleData> rules)
 			throws IOException {
-		for (Entry<RuleWritable, RuleData> entry : rules.entrySet()) {
-			RuleWritable key = entry.getKey();
+		for (Entry<Rule, RuleData> entry : rules.entrySet()) {
+			Rule key = entry.getKey();
 			// Need to add the 0th element for the global scope
 			prob.buildQuery(key, noOfProvs, wordAlignments);
 		}
@@ -120,8 +120,8 @@ public class TTableClient {
 				wordAlignments.put(keys.get(i), results[i]);
 			}
 		}
-		for (Entry<RuleWritable, RuleData> entry : rules.entrySet()) {
-			RuleWritable key = entry.getKey();
+		for (Entry<Rule, RuleData> entry : rules.entrySet()) {
+			Rule key = entry.getKey();
 			RuleData features = entry.getValue();
 			ProvenanceProbMap provLexProbs = new ProvenanceProbMap();
 			for (int j = 0; j < noOfProvs ; ++j) {
