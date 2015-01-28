@@ -23,15 +23,15 @@ object Extract {
         case (srcSpan, trgSpan) => {
           val isStart = srcSpan.start == 0
           if ((!isStart || (isStart && a.isSourceAligned(0))) &&
+          //a.isSourceAligned(srcSpan.end) &&
             a.isTargetAligned(trgSpan.end) && a.isTargetAligned(trgSpan.start)) {
             parentPhrases += pair
             var srcAligned = true
             for (i <- srcSpan.start to srcSpan.end if srcAligned) {
               srcAligned &= a.isSourceAligned(i)
             }
-            if (srcAligned && srcSpan.end - srcSpan.start + 1 <= options.maxNonTerminalSpan) {
+            if (srcAligned && srcSpan.end - srcSpan.start + 1 <= options.maxNonTerminalSpan)
               childPhrases += pair
-            }
           } else {
             otherPhrases += pair
           }
@@ -139,7 +139,7 @@ object Extract {
     parent match {
       case (pSrcSpan: OneNTSpan, pTrgSpan: OneNTSpan) => {
         val inRangeNT = inRange & (cSrcSpan.end < pSrcSpan.startX || cSrcSpan.start > pSrcSpan.endX)
-        val hasConsecutiveNT = 
+        val hasConsecutiveNT =
           (cSrcSpan.end + 1 == pSrcSpan.startX || pSrcSpan.endX + 1 == cSrcSpan.start ||
             cTrgSpan.end + 1 == pTrgSpan.startX || pTrgSpan.endX + 1 == cTrgSpan.start)
         inRangeNT && !hasConsecutiveNT
@@ -207,23 +207,23 @@ object Extract {
     var phraseAlignment = alignment.extractPhraseAlignment(span)
     span match {
       case (src: PhraseSpan, trg: PhraseSpan) => {
-        val r = new Rule(new WritableArrayBuffer ++= source.slice(src.start, src.end + 1),
-          new WritableArrayBuffer ++= target.slice(trg.start, trg.end + 1))
+        val r = new Rule(new RuleString ++= source.slice(src.start, src.end + 1),
+          new RuleString ++= target.slice(trg.start, trg.end + 1))
         (r, phraseAlignment)
       }
       case (src: OneNTSpan, trg: OneNTSpan) => {
-        val slicer = (symbols : Vector[Symbol], span : OneNTSpan) => new WritableArrayBuffer ++=
-           symbols.slice(span.start, span.startX) += X ++= symbols.slice(span.endX + 1, span.end + 1)
+        val slicer = (symbols: Vector[Symbol], span: OneNTSpan) => new RuleString ++=
+          symbols.slice(span.start, span.startX) += X ++= symbols.slice(span.endX + 1, span.end + 1)
         (new Rule(slicer(source, src), slicer(target, trg)), phraseAlignment)
       }
       case (src: TwoNTSpan, trg: TwoNTSpan) => {
-        val slicer = (symbols : Vector[Symbol], span : TwoNTSpan) => new WritableArrayBuffer ++= 
+        val slicer = (symbols: Vector[Symbol], span: TwoNTSpan) => new RuleString ++=
           symbols.slice(span.start, span.startX) += X1 ++= symbols.slice(span.endX + 1, span.startX2) += X2 ++=
           symbols.slice(span.endX2 + 1, span.end + 1)
         val trgString = if (trg.startX < trg.startX2) slicer(target, trg)
-        else new WritableArrayBuffer ++= target.slice(trg.start, trg.startX2) +=
-            X2 ++= target.slice(trg.endX2 + 1, trg.startX) += X1 ++=
-            target.slice(trg.endX + 1, trg.end + 1)
+        else new RuleString ++= target.slice(trg.start, trg.startX2) +=
+          X2 ++= target.slice(trg.endX2 + 1, trg.startX) += X1 ++=
+          target.slice(trg.endX + 1, trg.end + 1)
         (new Rule(slicer(source, src), trgString), phraseAlignment)
       }
       case _ => throw new UnsupportedOperationException("Must use spans of the same type")
@@ -236,17 +236,17 @@ object Extract {
     val alignment = new Alignment(alignmentString)
     val (parents, children, other) = extractPhrasePairs(options)(source, target, alignment)
     val deduper = new scala.collection.mutable.HashSet[Span]
+    val all = parents ++ other
     val extractor = extractNT(options, children, deduper)_
     val rules = extractor(parents)
     val phrases = (parents ++ other)
       .filter { case (srcSpan, _) => srcSpan.end - srcSpan.start + 1 <= options.maxSourcePhrase }
     (phrases ++ rules).map(transformSpan(source, target, alignment, _))
   }
-  
-  def extractJava(options: ExtractOptions)(sourceString: String, targetString: String, alignmentString: String): 
-    java.util.List[Pair[Rule, Alignment]] = 
-      extract(options)(sourceString, targetString, alignmentString).map { ra =>
-        val (r, a) = ra
-        new Pair(r, a)
-      }
+
+  def extractJava(options: ExtractOptions)(sourceString: String, targetString: String, alignmentString: String): java.util.List[Pair[Rule, Alignment]] =
+    extract(options)(sourceString, targetString, alignmentString).map { ra =>
+      val (r, a) = ra
+      new Pair(r, a)
+    }
 }

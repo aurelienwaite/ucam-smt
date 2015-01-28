@@ -27,12 +27,12 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.regionserver.StoreFile.BloomType;
 import org.apache.hadoop.hbase.util.BloomFilterFactory;
 import org.apache.hadoop.hbase.util.BloomFilterWriter;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
+import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
 
 /**
@@ -42,10 +42,10 @@ import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
  * @date 28 May 2014
  */
 public class SimpleHFileOutputFormat extends
-		FileOutputFormat<Text, TargetFeatureList> {
+		FileOutputFormat<RuleString, TargetFeatureList> {
 
 	@Override
-	public RecordWriter<Text, TargetFeatureList> getRecordWriter(
+	public RecordWriter<RuleString, TargetFeatureList> getRecordWriter(
 			TaskAttemptContext job) throws IOException {
 
 		final Configuration conf = job.getConfiguration();
@@ -55,7 +55,7 @@ public class SimpleHFileOutputFormat extends
 		final HFile.Writer writer = writerFactory.createWriter(fs, file,
 				64 * 1024, "gz", null);
 		final CacheConfig cacheConfig = new CacheConfig(conf);
-		return new RecordWriter<Text, TargetFeatureList>() {
+		return new RecordWriter<RuleString, TargetFeatureList>() {
 
 			private ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
 
@@ -72,7 +72,7 @@ public class SimpleHFileOutputFormat extends
 			}
 
 			@Override
-			public void write(Text key, TargetFeatureList value)
+			public void write(RuleString key, TargetFeatureList value)
 					throws IOException {
 				byte[] keyBytes = createBytes(key);
 				byte[] valueBytes = createBytes(value);

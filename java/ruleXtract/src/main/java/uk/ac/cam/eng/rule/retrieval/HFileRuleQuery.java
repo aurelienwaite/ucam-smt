@@ -31,7 +31,7 @@ import org.apache.hadoop.hbase.util.BloomFilter;
 import org.apache.hadoop.io.DataOutputBuffer;
 
 import uk.ac.cam.eng.extraction.Rule;
-import uk.ac.cam.eng.extraction.WritableArrayBuffer;
+import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.features.lexical.TTableClient;
 import uk.ac.cam.eng.extraction.hadoop.merge.MergeComparator;
@@ -53,7 +53,7 @@ class HFileRuleQuery implements Runnable {
 
 	private final BufferedWriter out;
 
-	private final Collection<WritableArrayBuffer> query;
+	private final Collection<RuleString> query;
 
 	private final RuleRetriever retriever;
 
@@ -66,7 +66,7 @@ class HFileRuleQuery implements Runnable {
 	private DataOutputBuffer tempOut = new DataOutputBuffer();
 
 	public HFileRuleQuery(HFileRuleReader reader, BloomFilter bf,
-			BufferedWriter out, Collection<WritableArrayBuffer> query,
+			BufferedWriter out, Collection<RuleString> query,
 			RuleRetriever retriever, CLI.ServerParams params) {
 		this.reader = reader;
 		this.bf = bf;
@@ -110,7 +110,7 @@ class HFileRuleQuery implements Runnable {
 	@SuppressWarnings("unchecked")
 	@Override
 	public void run() {
-		List<WritableArrayBuffer> sortedQuery = new ArrayList<>(query);
+		List<RuleString> sortedQuery = new ArrayList<>(query);
 		query.clear();
 		StopWatch stopWatch = new StopWatch();
 		System.out.println("Sorting query");
@@ -121,7 +121,7 @@ class HFileRuleQuery implements Runnable {
 		stopWatch.reset();
 		stopWatch.start();
 		try {
-			for (WritableArrayBuffer source : sortedQuery) {
+			for (RuleString source : sortedQuery) {
 				tempOut.reset();
 				source.write(tempOut);
 				if (!bf.contains(tempOut.getData(), 0, tempOut.getLength(),

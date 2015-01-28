@@ -19,7 +19,7 @@ import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 
 import uk.ac.cam.eng.extraction.Rule;
-import uk.ac.cam.eng.extraction.WritableArrayBuffer;
+import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 
 /**
@@ -30,7 +30,7 @@ import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 class MergePartitioner extends
 		Partitioner<Rule, RuleData> {
 
-	private Partitioner<WritableArrayBuffer, RuleData> defaultPartitioner = new HashPartitioner<>();
+	private Partitioner<RuleString, RuleData> defaultPartitioner = new HashPartitioner<>();
 	
 	@Override
 	public int getPartition(Rule key, RuleData value,

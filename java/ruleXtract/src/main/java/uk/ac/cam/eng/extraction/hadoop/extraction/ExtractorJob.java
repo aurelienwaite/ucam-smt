@@ -44,6 +44,7 @@ import uk.ac.cam.eng.extraction.ExtractOptions;
 import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ExtractedData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TextArrayWritable;
+import uk.ac.cam.eng.extraction.hadoop.features.phrase.Source2TargetJob.Source2TargetComparator;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.CLI.Provenance;
@@ -76,6 +77,7 @@ public class ExtractorJob extends Configured implements Tool {
 		job.setOutputValueClass(ExtractedData.class);
 		job.setMapperClass(ExtractorMapper.class);
 		job.setReducerClass(ExtractorReducer.class);
+		job.setSortComparatorClass(Source2TargetComparator.class);
 		job.setCombinerClass(ExtractorReducer.class);
 		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);

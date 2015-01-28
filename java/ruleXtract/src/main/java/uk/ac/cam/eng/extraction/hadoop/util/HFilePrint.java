@@ -17,6 +17,9 @@
 package uk.ac.cam.eng.extraction.hadoop.util;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;

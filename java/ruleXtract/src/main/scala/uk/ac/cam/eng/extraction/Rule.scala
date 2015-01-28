@@ -9,7 +9,7 @@ import org.apache.hadoop.io.WritableComparable
 import collection.JavaConversions._
 import uk.ac.cam.eng.rule.retrieval.SidePattern
 
-class WritableArrayBuffer extends ArrayBuffer[Symbol] with Writable {
+class RuleString extends ArrayBuffer[Symbol] with Writable {
 
   def readFields(in: java.io.DataInput): Unit = {
     clear();
@@ -26,7 +26,7 @@ class WritableArrayBuffer extends ArrayBuffer[Symbol] with Writable {
 
   def javaSize(): Int = size
 
-  def set(other: WritableArrayBuffer) = {
+  def set(other: RuleString) = {
     clear
     this ++= other
   }
@@ -46,10 +46,10 @@ class WritableArrayBuffer extends ArrayBuffer[Symbol] with Writable {
   }
 }
 
-class Rule(val source: WritableArrayBuffer, val target: WritableArrayBuffer) extends Equals
+class Rule(val source: RuleString, val target: RuleString) extends Equals
   with Writable with WritableComparable[Rule] {
 
-  def this() = this(new WritableArrayBuffer, new WritableArrayBuffer)
+  def this() = this(new RuleString, new RuleString)
 
   def this(str: String) = {
     this()
@@ -60,10 +60,10 @@ class Rule(val source: WritableArrayBuffer, val target: WritableArrayBuffer) ext
   }
 
   def this(other: Rule) =
-    this(new WritableArrayBuffer ++= other.source, new WritableArrayBuffer ++= other.target)
+    this(new RuleString ++= other.source, new RuleString ++= other.target)
 
   def this(src: java.util.List[Symbol], trg: java.util.List[Symbol]) =
-    this(new WritableArrayBuffer ++= src, new WritableArrayBuffer ++= trg)
+    this(new RuleString ++= src, new RuleString ++= trg)
 
   override def toString() = source.toString() + " " + target.toString()
 
@@ -83,7 +83,7 @@ class Rule(val source: WritableArrayBuffer, val target: WritableArrayBuffer) ext
   def isSwapping() = isSwappingString(source) || isSwappingString(target)
 
   def invertString(str: Seq[Symbol]) = {
-    val results = new WritableArrayBuffer
+    val results = new RuleString
     for (symbol <- str)
       if (symbol == X1) results += X2
       else if (symbol == X2) results += X1
@@ -125,14 +125,14 @@ class Rule(val source: WritableArrayBuffer, val target: WritableArrayBuffer) ext
 
   def getTarget(): java.util.List[Symbol] = target
 
-  private def set(str: WritableArrayBuffer, other: WritableArrayBuffer) = {
+  private def set(str: RuleString, other: RuleString) = {
     str.clear()
     str ++= other
   }
 
-  def setSource(other: WritableArrayBuffer) = set(source, other)
+  def setSource(other: RuleString) = set(source, other)
 
-  def setTarget(other: WritableArrayBuffer) = set(target, other)
+  def setTarget(other: RuleString) = set(target, other)
 
 }
 
@@ -148,4 +148,10 @@ object S2TOrdering extends Ordering[Rule] {
     }
   }
 
+}
+
+object Rule{
+  def apply(s : String) : Rule = new Rule(s)
+  
+  def unapply(r : Rule) : Option[String] = Some(r.toString())
 }

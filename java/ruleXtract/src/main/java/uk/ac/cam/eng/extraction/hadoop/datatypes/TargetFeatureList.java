@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 
-import uk.ac.cam.eng.extraction.WritableArrayBuffer;
+import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.util.Pair;
 
 /**
@@ -33,14 +33,14 @@ import uk.ac.cam.eng.util.Pair;
  * @date 28 May 2014
  */
 public class TargetFeatureList extends
-		ArrayList<Pair<WritableArrayBuffer, RuleData>> implements Writable {
+		ArrayList<Pair<RuleString, RuleData>> implements Writable {
 
 	private static final long serialVersionUID = 1L;
 
 	@Override
 	public void write(DataOutput out) throws IOException {
 		WritableUtils.writeVInt(out, size());
-		for (Pair<WritableArrayBuffer, RuleData> entry : this) {
+		for (Pair<RuleString, RuleData> entry : this) {
 			entry.getFirst().write(out);
 			entry.getSecond().write(out);
 		}
@@ -51,7 +51,7 @@ public class TargetFeatureList extends
 		clear();
 		int size = WritableUtils.readVInt(in);
 		for (int i = 0; i < size; ++i) {
-			WritableArrayBuffer target = new WritableArrayBuffer();
+			RuleString target = new RuleString();
 			target.readFields(in);
 			RuleData alignmentAndFeatures = new RuleData();
 			alignmentAndFeatures.readFields(in);

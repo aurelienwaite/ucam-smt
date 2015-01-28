@@ -40,7 +40,7 @@ import org.apache.hadoop.io.ByteWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 
-import uk.ac.cam.eng.extraction.WritableArrayBuffer;
+import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.IntWritableCache;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.Rule;
@@ -143,7 +143,7 @@ class RuleFilter {
 		}
 	}
 
-	public boolean filterSource(WritableArrayBuffer source) {
+	public boolean filterSource(RuleString source) {
 		SidePattern sourcePattern = source.toPattern();
 		if (sourcePattern.isPhrase()) {
 			return false;

@@ -29,7 +29,7 @@ import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.DataOutputBuffer;
 
 import uk.ac.cam.eng.extraction.Rule;
-import uk.ac.cam.eng.extraction.WritableArrayBuffer;
+import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
 import uk.ac.cam.eng.util.Pair;
@@ -47,7 +47,7 @@ public class HFileRuleReader implements Iterable<Pair<Rule, RuleData>> {
 	private final DataOutputBuffer out = new DataOutputBuffer();
 	private final Rule rule = new Rule();
 	private final TargetFeatureList value = new TargetFeatureList();
-	private WritableArrayBuffer key = new WritableArrayBuffer();
+	private RuleString key = new RuleString();
 
 	public HFileRuleReader(HFile.Reader hfReader) {
 		scanner = hfReader.getScanner(false, false);
@@ -65,7 +65,7 @@ public class HFileRuleReader implements Iterable<Pair<Rule, RuleData>> {
 		}
 	}
 
-	boolean seek(WritableArrayBuffer source) throws IOException {
+	boolean seek(RuleString source) throws IOException {
 		out.reset();
 		source.write(out);
 		int pos = scanner.seekTo(out.getData(), 0, out.getLength());
@@ -79,7 +79,7 @@ public class HFileRuleReader implements Iterable<Pair<Rule, RuleData>> {
 
 	public Iterable<Pair<Rule, RuleData>> getRulesForSource() {
 		readValue();
-		final Iterator<Pair<WritableArrayBuffer, RuleData>> instance = value
+		final Iterator<Pair<RuleString, RuleData>> instance = value
 				.iterator();
 
 		return new Iterable<Pair<Rule, RuleData>>() {
@@ -95,7 +95,7 @@ public class HFileRuleReader implements Iterable<Pair<Rule, RuleData>> {
 
 					@Override
 					public Pair<Rule, RuleData> next() {
-						Pair<WritableArrayBuffer, RuleData> next = instance
+						Pair<RuleString, RuleData> next = instance
 								.next();
 						rule.setTarget(next.getFirst());
 						return Pair.createPair(rule, next.getSecond());
@@ -111,10 +111,11 @@ public class HFileRuleReader implements Iterable<Pair<Rule, RuleData>> {
 		};
 	}
 
-	private WritableArrayBuffer readSource() {
+	private RuleString readSource() {
 		in.reset(scanner.getKey().array(), scanner.getKey().arrayOffset(),
 				scanner.getKey().limit());
 		key.readFields(in);
+		rule.setSource(key);
 		return key;
 	}
 

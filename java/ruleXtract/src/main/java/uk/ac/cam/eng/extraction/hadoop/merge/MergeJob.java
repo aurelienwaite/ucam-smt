@@ -31,7 +31,7 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 
 import uk.ac.cam.eng.extraction.Rule;
-import uk.ac.cam.eng.extraction.WritableArrayBuffer;
+import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ExtractedData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.FeatureMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
@@ -50,7 +50,7 @@ import com.beust.jcommander.ParameterException;
  */
 public class MergeJob extends Configured implements Tool {
 
-	private static class MergeFeatureMapper extends
+	public static class MergeFeatureMapper extends
 			Mapper<Rule, FeatureMap, Rule, RuleData> {
 
 		private RuleData ruleData = new RuleData();
@@ -64,7 +64,7 @@ public class MergeJob extends Configured implements Tool {
 
 	}
 
-	private static class MergeRuleMapper extends
+	public static class MergeRuleMapper extends
 			Mapper<Rule, ExtractedData, Rule, RuleData> {
 
 		private RuleData ruleData = new RuleData();
@@ -95,11 +95,11 @@ public class MergeJob extends Configured implements Tool {
 	}
 
 	private static class MergeReducer extends
-			Reducer<Rule, RuleData, WritableArrayBuffer, TargetFeatureList> {
+			Reducer<Rule, RuleData, RuleString, TargetFeatureList> {
 
 		private TargetFeatureList list = new TargetFeatureList();
 
-		private WritableArrayBuffer source = new WritableArrayBuffer();
+		private RuleString source = new RuleString();
 
 		@Override
 		protected void reduce(Rule key, Iterable<RuleData> values,
@@ -117,7 +117,7 @@ public class MergeJob extends Configured implements Tool {
 			for (RuleData value : values) {
 				ruleData.merge(value);
 			}
-			WritableArrayBuffer target = new WritableArrayBuffer();
+			RuleString target = new RuleString();
 			target.set(key.target());
 			list.add(Pair.createPair(target, ruleData));
 		}
@@ -145,7 +145,7 @@ public class MergeJob extends Configured implements Tool {
 		job.setMapOutputKeyClass(Rule.class);
 		job.setMapOutputValueClass(RuleData.class);
 		job.setOutputKeyClass(Rule.class);
-		job.setOutputValueClass(WritableArrayBuffer.class);
+		job.setOutputValueClass(RuleString.class);
 		job.setInputFormatClass(SequenceFileInputFormat.class);
 		job.setOutputFormatClass(SimpleHFileOutputFormat.class);
 		return job;

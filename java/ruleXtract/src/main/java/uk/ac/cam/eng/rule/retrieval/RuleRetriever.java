@@ -54,7 +54,7 @@ import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.S;
 import uk.ac.cam.eng.extraction.Symbol;
-import uk.ac.cam.eng.extraction.WritableArrayBuffer;
+import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.X;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
@@ -81,7 +81,7 @@ public class RuleRetriever {
 
 	private HFileRuleReader[] readers;
 
-	private Partitioner<WritableArrayBuffer, NullWritable> partitioner = new HashPartitioner<>();
+	private Partitioner<RuleString, NullWritable> partitioner = new HashPartitioner<>();
 
 	RuleFilter filter;
 
@@ -91,9 +91,9 @@ public class RuleRetriever {
 
 	Set<Rule> foundPassThroughRules = new HashSet<>();
 
-	Set<WritableArrayBuffer> testVocab;
+	Set<RuleString> testVocab;
 
-	Set<WritableArrayBuffer> foundTestVocab = new HashSet<>();
+	Set<RuleString> foundTestVocab = new HashSet<>();
 
 	private int maxSourcePhrase;
 
@@ -107,10 +107,10 @@ public class RuleRetriever {
 		filter = new RuleFilter(params.fp, fReg);
 		maxSourcePhrase = params.rp.maxSourcePhrase;
 		passThroughRules = getPassThroughRules();
-		Set<WritableArrayBuffer> fullTestVocab = getTestVocab(testFile);
-		Set<WritableArrayBuffer> passThroughVocab = getPassThroughVocab();
+		Set<RuleString> fullTestVocab = getTestVocab(testFile);
+		Set<RuleString> passThroughVocab = getPassThroughVocab();
 		testVocab = new HashSet<>();
-		for (WritableArrayBuffer word : fullTestVocab) {
+		for (RuleString word : fullTestVocab) {
 			if (!passThroughVocab.contains(word)) {
 				testVocab.add(word);
 			}
@@ -191,10 +191,10 @@ public class RuleRetriever {
 		return res;
 	}
 
-	private Set<WritableArrayBuffer> getPassThroughVocab() throws IOException {
+	private Set<RuleString> getPassThroughVocab() throws IOException {
 		// TODO simplify all template writing
 		// TODO getAsciiVocab is redundant with getAsciiConstraints
-		Set<WritableArrayBuffer> res = new HashSet<>();
+		Set<RuleString> res = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(
 				passThroughRulesFileName))) {
 			String line;
@@ -205,7 +205,7 @@ public class RuleRetriever {
 					String[] sourceString = matcher.group(1).split(" ");
 					// only one word
 					if (sourceString.length == 1) {
-						WritableArrayBuffer v = new WritableArrayBuffer();
+						RuleString v = new RuleString();
 						v.add(Symbol.deserialise(sourceString[0]));
 						res.add(v);
 					}
@@ -220,15 +220,15 @@ public class RuleRetriever {
 		return res;
 	}
 
-	private Set<WritableArrayBuffer> getTestVocab(String testFile)
+	private Set<RuleString> getTestVocab(String testFile)
 			throws FileNotFoundException, IOException {
-		Set<WritableArrayBuffer> res = new HashSet<>();
+		Set<RuleString> res = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(testFile))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				String[] parts = line.split("\\s+");
 				for (String part : parts) {
-					WritableArrayBuffer v = new WritableArrayBuffer();
+					RuleString v = new RuleString();
 					v.add(Symbol.deserialise(part));
 					res.add(v);
 				}
@@ -266,13 +266,13 @@ public class RuleRetriever {
 				fReg.getDefaultGlueStartOrEndFeatures(), out);
 	}
 
-	private List<Set<WritableArrayBuffer>> generateQueries(String testFileName,
+	private List<Set<RuleString>> generateQueries(String testFileName,
 			CLI.RuleRetrieverParameters params) throws IOException {
 		PatternInstanceCreator patternInstanceCreator = new PatternInstanceCreator(
 				params, filter.getPermittedSourcePatterns());
-		List<Set<WritableArrayBuffer>> queries = new ArrayList<>(readers.length);
+		List<Set<RuleString>> queries = new ArrayList<>(readers.length);
 		for (int i = 0; i < readers.length; ++i) {
-			queries.add(new HashSet<WritableArrayBuffer>());
+			queries.add(new HashSet<RuleString>());
 		}
 		try (BufferedReader reader = new BufferedReader(new FileReader(
 				testFileName))) {
@@ -283,12 +283,12 @@ public class RuleRetriever {
 				stopWatch.start();
 				Set<Rule> rules = patternInstanceCreator
 						.createSourcePatternInstances(line);
-				Collection<WritableArrayBuffer> sources = new ArrayList<>(rules.size());
+				Collection<RuleString> sources = new ArrayList<>(rules.size());
 				for (Rule rule : rules) {
-					WritableArrayBuffer source = rule.source();
+					RuleString source = rule.source();
 					sources.add(source);
 				}
-				for (WritableArrayBuffer source : sources) {
+				for (RuleString source : sources) {
 					if (filter.filterSource(source)) {
 						continue;
 					}
@@ -353,7 +353,7 @@ public class RuleRetriever {
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
 		System.err.println("Generating query");
-		List<Set<WritableArrayBuffer>> queries = retriever.generateQueries(params.testFile,
+		List<Set<RuleString>> queries = retriever.generateQueries(params.testFile,
 				params);
 		System.err.printf("Query took %d seconds to generate\n",
 				stopWatch.getTime() / 1000);
@@ -381,12 +381,12 @@ public class RuleRetriever {
 			}
 			// Add Deletetion and OOV rules
 			Rule deletionRuleWritable = new Rule();
-			WritableArrayBuffer zero = new WritableArrayBuffer();
+			RuleString zero = new RuleString();
 			zero.add(Symbol.deserialise(0));
 			deletionRuleWritable.setTarget(zero);
 			Rule oovRuleWritable = new Rule();
-			oovRuleWritable.setTarget(new WritableArrayBuffer());
-			for (WritableArrayBuffer source : retriever.testVocab) {
+			oovRuleWritable.setTarget(new RuleString());
+			for (RuleString source : retriever.testVocab) {
 				// Write deletion rule
 				if (retriever.foundTestVocab.contains(source)) {
 					deletionRuleWritable.setSource(source);
