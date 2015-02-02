@@ -13,8 +13,10 @@ class Alignment extends Writable {
 
   def this(alignmentString: String) = {
     this()
-    val alignments = alignmentString.split(" ") map (x => x split ("-") map (_.toInt))
-    for (alignment <- alignments) {
+    val alignments = alignmentString.split(" ") map (x =>
+      try Some(x split ("-") map (_.toInt))
+      catch {case _: NumberFormatException => None})
+    for (alignment <- alignments.flatten) {
       addAlignment(alignment(0), alignment(1))
     }
     prepareAlignments()
@@ -139,9 +141,9 @@ class Alignment extends Writable {
   def readFields(in: java.io.DataInput): Unit = {
     s2t.clear()
     t2s.clear()
-    for(i <- 0 until WritableUtils.readVInt(in)){
+    for (i <- 0 until WritableUtils.readVInt(in)) {
       val s = WritableUtils.readVInt(in)
-      for(j <- 0 until WritableUtils.readVInt(in)){
+      for (j <- 0 until WritableUtils.readVInt(in)) {
         val t = WritableUtils.readVInt(in)
         addAlignment(s, t)
       }

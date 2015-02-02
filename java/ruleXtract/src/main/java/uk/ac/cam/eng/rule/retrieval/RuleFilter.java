@@ -38,12 +38,11 @@ import java.util.function.Consumer;
 
 import org.apache.hadoop.io.ByteWritable;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.Text;
 
+import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.IntWritableCache;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
-import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.rule.features.Feature;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
 import uk.ac.cam.eng.util.CLI;

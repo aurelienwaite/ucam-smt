@@ -71,6 +71,7 @@ public class HFileRuleReader implements Iterable<Pair<Rule, RuleData>> {
 		int pos = scanner.seekTo(out.getData(), 0, out.getLength());
 		if (pos == 0) {
 			key.set(source);
+			rule.setSource(key);
 			return true;
 		} else {
 			return false;

@@ -47,19 +47,15 @@ import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.util.BloomFilter;
 import org.apache.hadoop.hbase.util.BloomFilterFactory;
 import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 
 import uk.ac.cam.eng.extraction.Rule;
-import uk.ac.cam.eng.extraction.S;
-import uk.ac.cam.eng.extraction.Symbol;
 import uk.ac.cam.eng.extraction.RuleString;
-import uk.ac.cam.eng.extraction.X;
+import uk.ac.cam.eng.extraction.Symbol;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
 import uk.ac.cam.eng.util.CLI;
-import uk.ac.cam.eng.util.Pair;
 
 import com.beust.jcommander.ParameterException;
 
@@ -307,7 +303,7 @@ public class RuleRetriever {
 	public static void writeRule(String LHS, Rule rule,
 			SortedMap<Integer, Double> processedFeatures, BufferedWriter out) {
 		StringBuilder res = new StringBuilder();
-		res.append(LHS).append(" ").append(rule);
+		res.append(LHS).append(" ").append(rule.toIntString());
 		for (int featureIndex : processedFeatures.keySet()) {
 			double featureValue = processedFeatures.get(featureIndex);
 			// one-based index
@@ -379,7 +375,7 @@ public class RuleRetriever {
 							out);
 				}
 			}
-			// Add Deletetion and OOV rules
+			// Add Deletion and OOV rules
 			Rule deletionRuleWritable = new Rule();
 			RuleString zero = new RuleString();
 			zero.add(Symbol.deserialise(0));

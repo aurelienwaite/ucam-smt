@@ -8,8 +8,9 @@ import org.apache.hadoop.io.WritableUtils
 import org.apache.hadoop.io.WritableComparable
 import collection.JavaConversions._
 import uk.ac.cam.eng.rule.retrieval.SidePattern
+import uk.ac.cam.eng.extraction.hadoop.merge.MergeComparator
 
-class RuleString extends ArrayBuffer[Symbol] with Writable {
+class RuleString extends ArrayBuffer[Symbol] with Writable with WritableComparable[RuleString] {
 
   def readFields(in: java.io.DataInput): Unit = {
     clear();
@@ -21,6 +22,8 @@ class RuleString extends ArrayBuffer[Symbol] with Writable {
     WritableUtils.writeVInt(out, size)
     for (s <- this) WritableUtils.writeVInt(out, s.serialised)
   }
+  
+  override def compareTo(other : RuleString) = RuleString.comparator.compare(this, other)
 
   // Methods needed for java
 
@@ -34,16 +37,23 @@ class RuleString extends ArrayBuffer[Symbol] with Writable {
   def add(other: Symbol) = this += other
 
   override def toString() = this.map(_.toString).mkString("_")
+  
+  def toIntString() = this.map(_.serialised.toString).mkString("_")
 
   def toPattern(): SidePattern = new SidePattern(this.map {
     case _: Terminal => "w"
     case nt          => nt.serialised.toString()
-  })
+  }.foldRight(new ArrayBuffer[String])((sym, pattern)=> 
+      if (!pattern.isEmpty && pattern.last == sym) pattern else pattern += sym))
 
   def getWords() = this.count {
     case t: Terminal => t.serialised > 0
     case _           => false
   }
+}
+
+object RuleString{
+  val comparator = new MergeComparator
 }
 
 class Rule(val source: RuleString, val target: RuleString) extends Equals
@@ -66,12 +76,8 @@ class Rule(val source: RuleString, val target: RuleString) extends Equals
     this(new RuleString ++= src, new RuleString ++= trg)
 
   override def toString() = source.toString() + " " + target.toString()
-
-  def hasTwoNT() = source.contains(X1)
-
-  def hasOneNT() = source.contains(X)
-
-  def isPhrase() = !hasOneNT && !hasTwoNT
+  
+  def toIntString() = source.toIntString() + " " + target.toIntString()
 
   private def isSwappingString(str: Seq[Symbol]): Boolean = {
     for (symbol <- str)
