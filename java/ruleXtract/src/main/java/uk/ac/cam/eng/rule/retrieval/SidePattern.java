@@ -55,17 +55,14 @@ public class SidePattern {
 		String[] parts = patternString.split("_");
 		List<String> elements = new ArrayList<String>();
 		for (String part : parts) {
-			if (part.equals("X")) {
+			if (part.equals("V")) {
 				elements.add("-1");
-			} else if (part.equals("X1")) {
+			} else if (part.equals("V1")) {
 				elements.add("-2");
-			} else if (part.equals("X2")) {
-				elements.add("-3");
 			} else if (part.equals("W")) {
 				elements.add("w");
 			} else {
-				System.err.println("Malformed pattern: " + patternString);
-				System.exit(1);
+				throw new RuntimeException("Malformed pattern: " + patternString);
 			}
 		}
 		return new SidePattern(elements);

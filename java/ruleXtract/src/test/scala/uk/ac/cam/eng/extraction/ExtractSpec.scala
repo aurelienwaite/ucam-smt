@@ -37,7 +37,7 @@ class ExtractSpec extends FlatSpec with Matchers {
         return rules.sorted.mkString("\n")
       }
       val fields = line.split(" ")
-      val elem = fields(1) + " " + fields(2)
+      val elem = (fields(1) + " " + fields(2)).replace("X1", "V").replace("X2", "V1").replace("X", "V")
       rules ++= (for (i <- 0 until fields(0).toInt) yield elem)
     }
     return rules.sorted.mkString("\n")

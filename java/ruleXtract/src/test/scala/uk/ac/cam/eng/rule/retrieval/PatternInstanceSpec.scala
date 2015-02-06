@@ -11,17 +11,17 @@ import uk.ac.cam.eng.extraction.Rule
 class PatternInstanceSpec extends FlatSpec with Matchers {
 
   "Pattern instances" should "be extracted from a sentence" in {
-    val sourcePatterns: java.util.Collection[SidePattern] =  List(SidePattern.parsePattern("W_X"),
-      SidePattern.parsePattern("X_W"),
-      SidePattern.parsePattern("W_X_W"),
-      SidePattern.parsePattern("X1_W_X2"),
-      SidePattern.parsePattern("X2_W_X1"),
-      SidePattern.parsePattern("W_X1_W_X2"),
-      SidePattern.parsePattern("W_X2_W_X1"),
-      SidePattern.parsePattern("X1_W_X2_W"),
-      SidePattern.parsePattern("X2_W_X1_W"),
-      SidePattern.parsePattern("W_X1_W_X2_W"),
-      SidePattern.parsePattern("W_X2_W_X1_W"))
+    val sourcePatterns: java.util.Collection[SidePattern] =  List(SidePattern.parsePattern("W_V"),
+      SidePattern.parsePattern("V_W"),
+      SidePattern.parsePattern("W_V_W"),
+      SidePattern.parsePattern("V_W_V1"),
+      SidePattern.parsePattern("V1_W_V"),
+      SidePattern.parsePattern("W_V_W_V1"),
+      SidePattern.parsePattern("W_V1_W_V"),
+      SidePattern.parsePattern("V_W_V1_W"),
+      SidePattern.parsePattern("V1_W_V_W"),
+      SidePattern.parsePattern("W_V_W_V1_W"),
+      SidePattern.parsePattern("W_V1_W_V_W"))
     val params = new RuleRetrieverParameters
     params.hr_max_height = 10
     params.rp.maxNonTerminalSpan = 10

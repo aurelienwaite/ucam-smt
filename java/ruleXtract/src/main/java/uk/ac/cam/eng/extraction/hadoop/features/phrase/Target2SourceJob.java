@@ -65,18 +65,15 @@ public class Target2SourceJob extends PhraseJob {
 
 	}
 
-	private static class SwappingMapper
-			extends
+	private static class SwappingMapper extends
 			Mapper<Rule, ExtractedData, Rule, ProvenanceCountMap> {
 
 		@Override
-		protected void map(Rule key, ExtractedData value,
-				Context context) throws IOException, InterruptedException {
+		protected void map(Rule key, ExtractedData value, Context context)
+				throws IOException, InterruptedException {
 			Rule newKey = key;
 			Rule r = new Rule(key);
-			if (r.isSwapping()) {
-				newKey = r.invertNonTerminals();
-			}
+			newKey = r.invertNonTerminals();
 			context.write(newKey, value.getProvenanceCountMap());
 		}
 	}
@@ -101,7 +98,6 @@ public class Target2SourceJob extends PhraseJob {
 		job.setOutputFormatClass(SequenceFileOutputFormat.class);
 		return job;
 	}
-
 
 	public static void main(String[] args) throws Exception {
 		int res = ToolRunner.run(new Target2SourceJob(), args);

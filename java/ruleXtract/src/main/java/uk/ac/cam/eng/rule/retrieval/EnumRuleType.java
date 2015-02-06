@@ -15,6 +15,12 @@
  *******************************************************************************/
 package uk.ac.cam.eng.rule.retrieval;
 
+import uk.ac.cam.eng.extraction.D$;
+import uk.ac.cam.eng.extraction.S$;
+import uk.ac.cam.eng.extraction.V$;
+import uk.ac.cam.eng.extraction.X$;
+
+
 
 /**
  * 
@@ -22,15 +28,15 @@ package uk.ac.cam.eng.rule.retrieval;
  * @date 28 May 2014
  */
 public enum EnumRuleType {
-	EXTRACTED("0"), PASSTHROUGH_OOV_DELETE("-1"), GLUE("");
+	X(X$.MODULE$), V(V$.MODULE$), S(S$.MODULE$), D(D$.MODULE$);
 
-	private EnumRuleType(String lhs) {
+	private EnumRuleType(Object lhs) {
 		this.lhs = lhs;
 	}
 
-	private final String lhs;
+	private final Object lhs;
 
-	public String getLhs() {
+	public Object getLhs() {
 		return lhs;
 	}
 }

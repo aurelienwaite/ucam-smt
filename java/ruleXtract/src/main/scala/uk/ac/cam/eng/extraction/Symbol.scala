@@ -3,28 +3,30 @@ package uk.ac.cam.eng.extraction
 sealed abstract class Symbol(val serialised: Int) extends Ordered[Symbol] {
 
   def compare(that: Symbol) = this.serialised - that.serialised
+
 }
 
 object Symbol {
+
+  val mapping = Map(V.toString() -> V, V1.toString() -> V1,
+    S.toString() -> S, X.toString() -> X, D.toString -> D, 
+    oov.toString() -> oov, dr.toString() -> dr)
+
   def deserialise(symbol: Int): Symbol = {
     symbol match {
-      case X.serialised  => X
-      case X1.serialised => X1
-      case X2.serialised => X2
-      case S.serialised  => S
       case V.serialised  => V
+      case V1.serialised => V1
+      case S.serialised  => S
+      case X.serialised  => X
+      case D.serialised  => D
+      case oov.serialised  => oov
+      case dr.serialised  => dr
       case _             => Terminal.create(symbol)
     }
   }
 
-  def deserialise(symbol: String): Symbol = {
-    if (symbol == X.toString) X
-    else if (symbol == X1.toString) X1
-    else if (symbol == X2.toString) X2
-    else if (symbol == S.toString) S
-    else if (symbol == V.toString) V
-    else Terminal.create(symbol.toInt)
-  }
+  def deserialise(symbol: String): Symbol = 
+    mapping.getOrElse(symbol, Terminal.create(symbol.toInt))
 }
 
 case class Terminal private (token: Int) extends Symbol(token) {
@@ -41,12 +43,20 @@ object Terminal {
     if (token < 10000) terminalCache(token) else new Terminal(token)
 }
 
-case object X extends Symbol(-1)
+case object V extends Symbol(-1)
 
-case object X1 extends Symbol(-2)
+case object V1 extends Symbol(-2)
 
-case object X2 extends Symbol(-3)
+case object S extends Symbol(-3)
 
-case object S extends Symbol(-4)
+case object X extends Symbol(-4)
 
-case object V extends Symbol(-5)
+case object D extends Symbol(-5)
+
+case object oov extends Symbol(-6){
+  override def toString() = "<oov>"
+}
+
+case object dr extends Symbol(-7){
+  override def toString() = "<dr>"
+}

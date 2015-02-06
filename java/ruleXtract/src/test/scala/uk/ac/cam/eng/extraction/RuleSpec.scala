@@ -10,7 +10,7 @@ import java.io.ByteArrayInputStream
 class RuleSpec extends FlatSpec with Matchers {
 
   "A rule" should "serialise and deserialise" in {
-    val ruleString = "82073_X1_28500_X2_2575 8107_X1_1547_X2_205"
+    val ruleString = "82073_V_28500_V1_2575 8107_V_1547_V1_205"
     val rule = new Rule(ruleString)
     val byteOut = new ByteArrayOutputStream()
     val out = new DataOutputStream(byteOut)
@@ -22,15 +22,15 @@ class RuleSpec extends FlatSpec with Matchers {
   } 
   
   "A rule" should "be invertiable" in {
-    val ruleString = "82073_X1_28500_X2_2575 8107_X1_1547_X2_205"
+    val ruleString = "82073_V_28500_V1_2575 8107_V_1547_V1_205"
     val rule = new Rule(ruleString)
     rule.isSwapping() should be (false)
     
-    val ruleSwapString = "82073_X1_28500_X2_2575 8107_X2_1547_X1_205"
+    val ruleSwapString = "82073_V_28500_V1_2575 8107_V1_1547_V_205"
     val ruleSwap = new Rule(ruleSwapString)
     ruleSwap.isSwapping() should be (true)
     ruleSwap.invertNonTerminals() should not be (ruleSwap)
-    val inverted = new Rule("82073_X2_28500_X1_2575 8107_X1_1547_X2_205")
+    val inverted = new Rule("82073_V1_28500_V_2575 8107_V_1547_V1_205")
     ruleSwap.invertNonTerminals() should be (inverted)
   }
 }

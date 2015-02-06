@@ -116,7 +116,7 @@ class PipelineTest extends FunSuite with BeforeAndAfterAll {
           assertWithDelta(-1.3862943611198906)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
-        case Rule("125_4368_X_6 X_131_562_8") => {
+        case Rule("125_4368_V_6 V_131_562_8") => {
           assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(-0.6931471805599453)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
@@ -124,15 +124,15 @@ class PipelineTest extends FunSuite with BeforeAndAfterAll {
           assertWithDelta(-0.6931471805599453)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(-0.6931471805599453)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
-        case Rule("X1_31_317_X2 X1_18_7_3_450_X2") => {
+        case Rule("V_31_317_V1 V_18_7_3_450_V1") => {
           assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
-        case Rule("X1_1176_X2_4 X1_1341_4_X2_5") => {
+        case Rule("V_1176_V1_4 V_1341_4_V1_5") => {
           assertWithDelta(-0.7472144018302211)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
-        case Rule("94345_X1_5_X2_4 4066102_X1_6_X2_5") => {
+        case Rule("94345_V_5_V1_4 4066102_V_6_V1_5") => {
           assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
@@ -140,7 +140,7 @@ class PipelineTest extends FunSuite with BeforeAndAfterAll {
           assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
-        case Rule("198_X_5212_3_130 58_X_1758_4_65") => {
+        case Rule("198_V_5212_3_130 58_V_1758_4_65") => {
           assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }

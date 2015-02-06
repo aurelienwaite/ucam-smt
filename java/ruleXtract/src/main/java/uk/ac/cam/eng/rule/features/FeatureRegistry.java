@@ -6,8 +6,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 import org.apache.hadoop.io.IntWritable;
 
@@ -23,7 +21,7 @@ public class FeatureRegistry {
 	private final static double DEFAULT_S2T_PHRASE_LOG_PROB = -4.7;
 
 	private final static double DEFAULT_T2S_PHRASE_LOG_PROB = -7;
-	
+
 	private final static double DEFAULT_LEX_VALUE = -40;
 
 	private final List<Feature> allFeatures;
@@ -36,17 +34,19 @@ public class FeatureRegistry {
 
 	private final double[] zeroProv;
 
-	private final SortedMap<Integer, Double> defaultFeatures;
+	private final Map<Integer, Double> defaultFeatures;
 
-	private final SortedMap<Integer, Double> defaultOOVFeatures;
+	private final Map<Integer, Double> defaultOOVFeatures;
 
-	private final SortedMap<Integer, Double> defaultPassThroughFeatures;
+	private final Map<Integer, Double> defaultPassThroughFeatures;
 
-	private final SortedMap<Integer, Double> defaultDeletionFeatures;
+	private final Map<Integer, Double> defaultDeletionFeatures;
 
-	private final SortedMap<Integer, Double> defaultGlueFeatures;
+	private final Map<Integer, Double> defaultGlueFeatures;
 
-	private final SortedMap<Integer, Double> defaultGlueStartOrEndFeatures;
+	private final Map<Integer, Double> defaultDeleteGlueFeatures;
+
+	private final Map<Integer, Double> defaultGlueStartOrEndFeatures;
 
 	private final boolean hasLexicalFeatures;
 
@@ -80,6 +80,7 @@ public class FeatureRegistry {
 		defaultPassThroughFeatures = createPassThroughDefaultData();
 		defaultDeletionFeatures = createDeletionDefaultData();
 		defaultGlueFeatures = createGlueDefaultData();
+		defaultDeleteGlueFeatures = createDeleteGlueDefaultData();
 		defaultGlueStartOrEndFeatures = createGlueStartOrEndDefaultData();
 	}
 
@@ -139,8 +140,7 @@ public class FeatureRegistry {
 		}
 	}
 
-	private void addDefault(Feature f, SortedMap<Integer, Double> vals,
-			double val) {
+	private void addDefault(Feature f, Map<Integer, Double> vals, double val) {
 		if (allFeatures.contains(f)) {
 			int[] mappings = getFeatureIndices(f);
 			for (int mapping : mappings) {
@@ -154,9 +154,9 @@ public class FeatureRegistry {
 	 * 
 	 * @return
 	 */
-	private SortedMap<Integer, Double> createDefaultData() {
+	private Map<Integer, Double> createDefaultData() {
 		// Provenance phrase probabilities need default values
-		SortedMap<Integer, Double> defaultFeatures = new TreeMap<Integer, Double>();
+		Map<Integer, Double> defaultFeatures = new HashMap<Integer, Double>();
 		addDefault(Feature.PROVENANCE_SOURCE2TARGET_PROBABILITY,
 				defaultFeatures, DEFAULT_S2T_PHRASE_LOG_PROB);
 		addDefault(Feature.PROVENANCE_TARGET2SOURCE_PROBABILITY,
@@ -170,9 +170,9 @@ public class FeatureRegistry {
 	 * 
 	 * @return
 	 */
-	private SortedMap<Integer, Double> createPassThroughDefaultData() {
+	private Map<Integer, Double> createPassThroughDefaultData() {
 		// We need to add default values for lexical probs
-		SortedMap<Integer, Double> defaultFeatures = new TreeMap<Integer, Double>();
+		Map<Integer, Double> defaultFeatures = new HashMap<Integer, Double>();
 		addDefault(Feature.SOURCE2TARGET_LEXICAL_PROBABILITY, defaultFeatures,
 				DEFAULT_LEX_VALUE);
 		addDefault(Feature.TARGET2SOURCE_LEXICAL_PROBABILITY, defaultFeatures,
@@ -184,54 +184,64 @@ public class FeatureRegistry {
 		return defaultFeatures;
 	}
 
-	private SortedMap<Integer, Double> createOOVDefaultData() {
-		SortedMap<Integer, Double> defaultFeatures = new TreeMap<Integer, Double>();
+	private Map<Integer, Double> createOOVDefaultData() {
+		Map<Integer, Double> defaultFeatures = new HashMap<Integer, Double>();
 		addDefault(Feature.INSERT_SCALE, defaultFeatures, -1d);
 		return defaultFeatures;
 	}
 
-	private SortedMap<Integer, Double> createDeletionDefaultData() {
-		SortedMap<Integer, Double> defaultFeatures = new TreeMap<Integer, Double>();
+	private Map<Integer, Double> createDeletionDefaultData() {
+		Map<Integer, Double> defaultFeatures = new HashMap<Integer, Double>();
 		addDefault(Feature.INSERT_SCALE, defaultFeatures, -1d);
 		return defaultFeatures;
 	}
 
-	private SortedMap<Integer, Double> createGlueDefaultData() {
-		SortedMap<Integer, Double> defaultFeatures = new TreeMap<Integer, Double>();
+	private Map<Integer, Double> createGlueDefaultData() {
+		Map<Integer, Double> defaultFeatures = new HashMap<Integer, Double>();
 		addDefault(Feature.GLUE_RULE, defaultFeatures, 1d);
 		return defaultFeatures;
 	}
 
-	private SortedMap<Integer, Double> createGlueStartOrEndDefaultData() {
-		SortedMap<Integer, Double> defaultFeatures = new TreeMap<Integer, Double>();
+	private Map<Integer, Double> createDeleteGlueDefaultData() {
+		Map<Integer, Double> defaultFeatures = new HashMap<Integer, Double>();
+		addDefault(Feature.GLUE_RULE, defaultFeatures, 2d);
+		return defaultFeatures;
+	}
+
+	private Map<Integer, Double> createGlueStartOrEndDefaultData() {
+		Map<Integer, Double> defaultFeatures = new HashMap<Integer, Double>();
 		addDefault(Feature.RULE_COUNT_GREATER_THAN_2, defaultFeatures, 1d);
 		addDefault(Feature.RULE_INSERTION_PENALTY, defaultFeatures, 1d);
 		addDefault(Feature.WORD_INSERTION_PENALTY, defaultFeatures, 1d);
 		return defaultFeatures;
 	}
 
-	public SortedMap<Integer, Double> getDefaultFeatures() {
-		return new TreeMap<Integer, Double>(defaultFeatures);
+	public Map<Integer, Double> getDefaultFeatures() {
+		return new HashMap<Integer, Double>(defaultFeatures);
 	}
 
-	public SortedMap<Integer, Double> getDefaultOOVFeatures() {
-		return new TreeMap<Integer, Double>(defaultOOVFeatures);
+	public Map<Integer, Double> getDefaultOOVFeatures() {
+		return new HashMap<Integer, Double>(defaultOOVFeatures);
 	}
 
-	public SortedMap<Integer, Double> getDefaultDeletionFeatures() {
-		return new TreeMap<Integer, Double>(defaultDeletionFeatures);
+	public Map<Integer, Double> getDefaultDeletionFeatures() {
+		return new HashMap<Integer, Double>(defaultDeletionFeatures);
 	}
 
-	public SortedMap<Integer, Double> getDefaultGlueFeatures() {
-		return new TreeMap<Integer, Double>(defaultGlueFeatures);
+	public Map<Integer, Double> getDefaultGlueFeatures() {
+		return new HashMap<Integer, Double>(defaultGlueFeatures);
 	}
 
-	public SortedMap<Integer, Double> getDefaultGlueStartOrEndFeatures() {
-		return new TreeMap<Integer, Double>(defaultGlueStartOrEndFeatures);
+	public Map<Integer, Double> getDefaultDeleteGlueFeatures() {
+		return new HashMap<Integer, Double>(defaultDeleteGlueFeatures);
 	}
 
-	public SortedMap<Integer, Double> getDefaultPassThroughRuleFeatures() {
-		return new TreeMap<Integer, Double>(defaultPassThroughFeatures);
+	public Map<Integer, Double> getDefaultGlueStartOrEndFeatures() {
+		return new HashMap<Integer, Double>(defaultGlueStartOrEndFeatures);
+	}
+
+	public Map<Integer, Double> getDefaultPassThroughRuleFeatures() {
+		return new HashMap<Integer, Double>(defaultPassThroughFeatures);
 	}
 
 	private static final ProvenanceProbMap checkedGetProbs(Feature f,
@@ -251,9 +261,9 @@ public class FeatureRegistry {
 	 * @param defaults
 	 * @return
 	 */
-	public SortedMap<Integer, Double> createFoundPassThroughRuleFeatures(
+	public Map<Integer, Double> createFoundPassThroughRuleFeatures(
 			FeatureMap features) {
-		SortedMap<Integer, Double> defaults = getDefaultPassThroughRuleFeatures();
+		Map<Integer, Double> defaults = getDefaultPassThroughRuleFeatures();
 		allFeatures
 				.stream()
 				.filter((f) -> Feature.ComputeLocation.LEXICAL_SERVER == f.computed)
@@ -278,7 +288,7 @@ public class FeatureRegistry {
 	}
 
 	private static void setVal(int mapping, double val,
-			SortedMap<Integer, Double> features) {
+			Map<Integer, Double> features) {
 		// Default val in sparse tuple arc is 0. Delete default val.
 		if (val == 0.0) {
 			features.remove(mapping);
@@ -287,15 +297,14 @@ public class FeatureRegistry {
 		}
 	}
 
-	public SortedMap<Integer, Double> processFeatures(Rule rule,
-			RuleData data) {
-		SortedMap<Integer, Double> processedFeatures = getDefaultFeatures();
+	public Map<Integer, Double> processFeatures(Rule rule, RuleData data) {
+		Map<Integer, Double> processedFeatures = getDefaultFeatures();
 		for (Feature f : allFeatures) {
 			int[] mappings = indexMappings.get(f);
 			if (Feature.ComputeLocation.RETRIEVAL == f.computed) {
 				double[] results = FeatureFunctionRegistry.computeFeature(f,
 						rule, data, this);
-				if(results == null){
+				if (results == null) {
 					continue;
 				}
 				for (int i = 0; i < results.length; ++i) {
@@ -304,14 +313,15 @@ public class FeatureRegistry {
 			} else {
 				ProvenanceProbMap probs = checkedGetProbs(f, data.getFeatures());
 				for (int i = 0; i < mappings.length; ++i) {
-					//Provenances are 1-indexed with the 0th element reserved for the global
-					//scope.
-					int index= Feature.Scope.PROVENANCE == f.scope ? i+1 : i;
-					if (probs
-							.containsKey(IntWritableCache.createIntWritable(index))) {
-						double ffVal = probs
-								.get(IntWritableCache
-										.createIntWritable(index)).get();
+					// Provenances are 1-indexed with the 0th element reserved
+					// for the global
+					// scope.
+					int index = Feature.Scope.PROVENANCE == f.scope ? i + 1 : i;
+					if (probs.containsKey(IntWritableCache
+							.createIntWritable(index))) {
+						double ffVal = probs.get(
+								IntWritableCache.createIntWritable(index))
+								.get();
 						setVal(mappings[i], ffVal, processedFeatures);
 					}
 				}

@@ -48,7 +48,7 @@ class PatternInstanceCreator {
 
 	private final int hrMaxHeight;
 
-	private final List<SidePattern> sidePatterns;
+	private final Set<SidePattern> sidePatterns;
 
 	public PatternInstanceCreator(
 			CLI.RuleRetrieverParameters params,
@@ -58,7 +58,7 @@ class PatternInstanceCreator {
 		maxTerminalLength = params.rp.maxTerminalLength;
 		maxNonTerminalSpan = params.rp.maxNonTerminalSpan;
 		hrMaxHeight = params.hr_max_height;
-		this.sidePatterns = new ArrayList<>(sidePatterns);
+		this.sidePatterns = new HashSet<>(sidePatterns);
 	}
 
 	/**
@@ -84,12 +84,16 @@ class PatternInstanceCreator {
 		}
 		Set<Rule> sourcePatternInstances = getPatternInstancesFromSourceSentence(
 				sourceSentence, sidePatterns);
-		res.addAll(sourcePatternInstances);
+		for(Rule r : sourcePatternInstances){
+			if(sidePatterns.contains(r.source().toPattern())){
+				res.add(r);
+			}
+		}
 		return res;
 	}
 
 	private Set<Rule> getPatternInstancesFromSourceSentence(
-			List<Integer> sourceSentence, List<SidePattern> sidePatterns) {
+			List<Integer> sourceSentence, Set<SidePattern> sidePatterns) {
 		Set<Rule> res = new HashSet<Rule>();
 		for (SidePattern sidePattern : sidePatterns) {
 			for (int i = 0; i < sourceSentence.size(); i++) {

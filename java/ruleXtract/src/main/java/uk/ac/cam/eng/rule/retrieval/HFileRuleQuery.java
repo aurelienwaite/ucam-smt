@@ -24,7 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.SortedMap;
+import java.util.Set;
 
 import org.apache.commons.lang.time.StopWatch;
 import org.apache.hadoop.hbase.util.BloomFilter;
@@ -32,6 +32,7 @@ import org.apache.hadoop.io.DataOutputBuffer;
 
 import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.RuleString;
+import uk.ac.cam.eng.extraction.Symbol;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.features.lexical.TTableClient;
 import uk.ac.cam.eng.extraction.hadoop.merge.MergeComparator;
@@ -44,8 +45,6 @@ import uk.ac.cam.eng.util.Pair;
  * @date 28 May 2014
  */
 class HFileRuleQuery implements Runnable {
-
-	private static final int BATCH_SIZE = 1000;
 
 	private final HFileRuleReader reader;
 
@@ -61,9 +60,11 @@ class HFileRuleQuery implements Runnable {
 
 	private final TTableClient t2sClient;
 
-	private final Map<Rule, RuleData> queue = new HashMap<>();
+	private final DataOutputBuffer tempOut = new DataOutputBuffer();
 
-	private DataOutputBuffer tempOut = new DataOutputBuffer();
+	private final Map<Rule, Pair<EnumRuleType, RuleData>> queue = new HashMap<>();
+	
+	private static final int BATCH_SIZE = 1000;
 
 	public HFileRuleQuery(HFileRuleReader reader, BloomFilter bf,
 			BufferedWriter out, Collection<RuleString> query,
@@ -81,28 +82,29 @@ class HFileRuleQuery implements Runnable {
 		}
 	}
 
-	private void drainQueue() throws IOException {
+	private void drainQueue()
+			throws IOException {
 		if (retriever.fReg.hasLexicalFeatures()) {
 			s2tClient.queryRules(queue);
 			t2sClient.queryRules(queue);
 		}
-		for (Entry<Rule, RuleData> entry : queue.entrySet()) {
-			Rule rule = entry.getKey();
-			RuleData rawFeatures = entry.getValue();
+		for (Entry<Rule, Pair<EnumRuleType, RuleData>> e : queue.entrySet()) {
+			Rule rule = e.getKey();
+			EnumRuleType type = e.getValue().getFirst();
+			RuleData rawFeatures = e.getValue().getSecond();
 			if (retriever.passThroughRules.contains(rule)) {
 				Rule asciiRule = new Rule(rule);
 				synchronized (retriever.foundPassThroughRules) {
 					retriever.foundPassThroughRules.add(asciiRule);
 				}
-				RuleRetriever.writeRule(EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs(), rule, retriever.fReg
+				retriever.writeRule(type, rule, retriever.fReg
 						.createFoundPassThroughRuleFeatures(rawFeatures
 								.getFeatures()), out);
 			} else {
-				SortedMap<Integer, Double> processed = retriever.fReg
+				Map<Integer, Double> processed = retriever.fReg
 						.processFeatures(rule, rawFeatures);
-				RuleRetriever.writeRule(EnumRuleType.EXTRACTED.getLhs(), rule, processed, out);
+				retriever.writeRule(type, rule, processed, out);
 			}
-
 		}
 		queue.clear();
 	}
@@ -135,13 +137,27 @@ class HFileRuleQuery implements Runnable {
 						}
 					}
 					List<Pair<Rule, RuleData>> rules = new ArrayList<>();
-					for(Pair<Rule, RuleData> entry : reader.getRulesForSource()){
-						rules.add(Pair.createPair(new Rule(entry.getFirst()), new RuleData(entry.getSecond())));
+					for (Pair<Rule, RuleData> entry : reader
+							.getRulesForSource()) {
+						rules.add(Pair.createPair(new Rule(entry.getFirst()),
+								new RuleData(entry.getSecond())));
 					}
-					Map<Rule, RuleData> filtered = retriever.filter
-							.filter(source.toPattern(), rules);
-					queue.putAll(filtered);
-					if (queue.size() > BATCH_SIZE) {
+					SidePattern pattern = source.toPattern();
+					Map<Rule, RuleData> filtered = retriever.filter.filter(
+							pattern, rules);
+					EnumRuleType type = pattern.isPhrase() ? EnumRuleType.V
+							: EnumRuleType.X;
+					Set<Integer> sentenceIds = retriever.sourceToSentenceId.get(source);
+					for (Entry<Rule, RuleData> e : filtered.entrySet()) {
+						queue.put(e.getKey(), Pair.createPair(type, e.getValue()));
+						List<Symbol> words = e.getKey().target().getTerminals();
+						for(int id : sentenceIds){
+							synchronized(retriever.targetSideVocab){
+								retriever.targetSideVocab.get(id).addAll(words);
+							}
+						}
+					}
+					if(queue.size() > BATCH_SIZE){
 						drainQueue();
 					}
 				}
@@ -151,6 +167,7 @@ class HFileRuleQuery implements Runnable {
 			e.printStackTrace();
 			System.exit(1);
 		}
+		
 		System.out
 				.printf("Query took %d seconds\n", stopWatch.getTime() / 1000);
 

@@ -213,16 +213,16 @@ object Extract {
       }
       case (src: OneNTSpan, trg: OneNTSpan) => {
         val slicer = (symbols: Vector[Symbol], span: OneNTSpan) => new RuleString ++=
-          symbols.slice(span.start, span.startX) += X ++= symbols.slice(span.endX + 1, span.end + 1)
+          symbols.slice(span.start, span.startX) += V ++= symbols.slice(span.endX + 1, span.end + 1)
         (new Rule(slicer(source, src), slicer(target, trg)), phraseAlignment)
       }
       case (src: TwoNTSpan, trg: TwoNTSpan) => {
         val slicer = (symbols: Vector[Symbol], span: TwoNTSpan) => new RuleString ++=
-          symbols.slice(span.start, span.startX) += X1 ++= symbols.slice(span.endX + 1, span.startX2) += X2 ++=
+          symbols.slice(span.start, span.startX) += V ++= symbols.slice(span.endX + 1, span.startX2) += V1 ++=
           symbols.slice(span.endX2 + 1, span.end + 1)
         val trgString = if (trg.startX < trg.startX2) slicer(target, trg)
         else new RuleString ++= target.slice(trg.start, trg.startX2) +=
-          X2 ++= target.slice(trg.endX2 + 1, trg.startX) += X1 ++=
+          V1 ++= target.slice(trg.endX2 + 1, trg.startX) += V ++=
           target.slice(trg.endX + 1, trg.end + 1)
         (new Rule(slicer(source, src), trgString), phraseAlignment)
       }

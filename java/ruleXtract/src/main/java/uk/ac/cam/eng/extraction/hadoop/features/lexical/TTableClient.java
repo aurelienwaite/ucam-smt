@@ -32,7 +32,9 @@ import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.ProvenanceProbMap;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.rule.features.Feature;
+import uk.ac.cam.eng.rule.retrieval.EnumRuleType;
 import uk.ac.cam.eng.util.CLI;
+import uk.ac.cam.eng.util.Pair;
 
 /**
  * 
@@ -105,9 +107,9 @@ public class TTableClient {
 	}
 
 	public void queryRules(
-			Map<Rule, RuleData> rules)
+			Map<Rule, Pair<EnumRuleType, RuleData>> rules)
 			throws IOException {
-		for (Entry<Rule, RuleData> entry : rules.entrySet()) {
+		for (Entry<Rule, Pair<EnumRuleType,RuleData>> entry : rules.entrySet()) {
 			Rule key = entry.getKey();
 			// Need to add the 0th element for the global scope
 			prob.buildQuery(key, noOfProvs, wordAlignments);
@@ -120,9 +122,9 @@ public class TTableClient {
 				wordAlignments.put(keys.get(i), results[i]);
 			}
 		}
-		for (Entry<Rule, RuleData> entry : rules.entrySet()) {
+		for (Entry<Rule, Pair<EnumRuleType,RuleData>> entry : rules.entrySet()) {
 			Rule key = entry.getKey();
-			RuleData features = entry.getValue();
+			RuleData features = entry.getValue().getSecond();
 			ProvenanceProbMap provLexProbs = new ProvenanceProbMap();
 			for (int j = 0; j < noOfProvs ; ++j) {
 				double lexProb = prob.value(key, (byte) j, wordAlignments);

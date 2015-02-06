@@ -3,7 +3,6 @@ package uk.ac.cam.eng.rule.features;
 import org.apache.hadoop.io.ByteWritable;
 
 import uk.ac.cam.eng.extraction.Rule;
-import uk.ac.cam.eng.extraction.Terminal;
 import uk.ac.cam.eng.rule.features.FeatureFunctionRegistry.FeatureFunctionInputData;
 
 public final class FeatureFunctions {
@@ -48,7 +47,7 @@ public final class FeatureFunctions {
 	}
 
 	static double[] noOfWords(Rule r, FeatureFunctionInputData data) {
-		return new double[]{r.target().getWords()};
+		return new double[]{r.target().getWordCount()};
 	}
 
 }

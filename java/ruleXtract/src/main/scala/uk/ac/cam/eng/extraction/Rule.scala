@@ -37,19 +37,23 @@ class RuleString extends ArrayBuffer[Symbol] with Writable with WritableComparab
   def add(other: Symbol) = this += other
 
   override def toString() = this.map(_.toString).mkString("_")
-  
-  def toIntString() = this.map(_.serialised.toString).mkString("_")
 
   def toPattern(): SidePattern = new SidePattern(this.map {
     case _: Terminal => "w"
     case nt          => nt.serialised.toString()
-  }.foldRight(new ArrayBuffer[String])((sym, pattern)=> 
-      if (!pattern.isEmpty && pattern.last == sym) pattern else pattern += sym))
+  }.foldLeft(new ArrayBuffer[String]){(pattern, sym)=> 
+      if (!pattern.isEmpty && pattern.last == sym) pattern else pattern += sym})
 
-  def getWords() = this.count {
+  def getWordCount() = this.count {
     case t: Terminal => t.serialised > 0
     case _           => false
   }
+ 
+  def getTerminals() : java.util.List[Symbol]= this.filter { 
+    case _ : Terminal => true
+    case _ => false
+  }
+  
 }
 
 object RuleString{
@@ -76,13 +80,11 @@ class Rule(val source: RuleString, val target: RuleString) extends Equals
     this(new RuleString ++= src, new RuleString ++= trg)
 
   override def toString() = source.toString() + " " + target.toString()
-  
-  def toIntString() = source.toIntString() + " " + target.toIntString()
 
   private def isSwappingString(str: Seq[Symbol]): Boolean = {
     for (symbol <- str)
-      if (symbol == X1) return false
-      else if (symbol == X2) return true
+      if (symbol == V) return false
+      else if (symbol == V1) return true
     false
   }
 
@@ -91,14 +93,18 @@ class Rule(val source: RuleString, val target: RuleString) extends Equals
   def invertString(str: Seq[Symbol]) = {
     val results = new RuleString
     for (symbol <- str)
-      if (symbol == X1) results += X2
-      else if (symbol == X2) results += X1
+      if (symbol == V1) results += V
+      else if (symbol == V) results += V1
       else results += symbol
     results
   }
 
-  def invertNonTerminals(): Rule = new Rule(invertString(source), invertString(target))
-
+  def invertNonTerminals(): Rule = 
+    if (isSwapping)
+      new Rule(invertString(source), invertString(target))
+    else
+      this
+    
   def canEqual(other: Any) = {
     other.isInstanceOf[uk.ac.cam.eng.extraction.Rule]
   }

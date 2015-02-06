@@ -21,15 +21,18 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -53,7 +56,9 @@ import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.Symbol;
+import uk.ac.cam.eng.extraction.Terminal;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
+import uk.ac.cam.eng.rule.features.Feature;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
 import uk.ac.cam.eng.util.CLI;
 
@@ -91,14 +96,24 @@ public class RuleRetriever {
 
 	Set<RuleString> foundTestVocab = new HashSet<>();
 
+	Map<RuleString, Set<Integer>> sourceToSentenceId = new HashMap<>();
+
+	List<Set<Symbol>> targetSideVocab = new ArrayList<>();
+
 	private int maxSourcePhrase;
 
 	FeatureRegistry fReg;
+
+	private int noOfFeatures;
+
+	private String targetVocabFile;
 
 	private void setup(String testFile, CLI.RuleRetrieverParameters params)
 			throws FileNotFoundException, IOException {
 		fReg = new FeatureRegistry(params.features.features,
 				params.rp.prov.provenance);
+		noOfFeatures = fReg.getFeatureIndices(fReg.getFeatures().toArray(
+				new Feature[0])).length;
 		passThroughRulesFileName = params.passThroughRules;
 		filter = new RuleFilter(params.fp, fReg);
 		maxSourcePhrase = params.rp.maxSourcePhrase;
@@ -111,6 +126,7 @@ public class RuleRetriever {
 				testVocab.add(word);
 			}
 		}
+		targetVocabFile = params.vocab;
 	}
 
 	private void loadDir(String dirString) throws IOException {
@@ -171,8 +187,10 @@ public class RuleRetriever {
 							source.clear();
 							target.clear();
 						}
-						source.add(Symbol.deserialise(Integer.parseInt(sourceString[i])));
-						target.add(Symbol.deserialise(Integer.parseInt(targetString[i])));
+						source.add(Symbol.deserialise(Integer
+								.parseInt(sourceString[i])));
+						target.add(Symbol.deserialise(Integer
+								.parseInt(targetString[i])));
 						i++;
 					}
 					Rule rule = new Rule(source, target);
@@ -234,31 +252,15 @@ public class RuleRetriever {
 	}
 
 	public void writeGlueRules(BufferedWriter out) {
-		List<Symbol> sideGlueRule1 = new ArrayList<Symbol>();
-		sideGlueRule1.add(Symbol.deserialise(-4));
-		sideGlueRule1.add(Symbol.deserialise(-1));
-		Rule glueRule1 = new Rule(sideGlueRule1, sideGlueRule1);
-		writeRule("-4", glueRule1,
+		writeRule(EnumRuleType.S, new Rule("S_D_X S_D_X"),
+				fReg.getDefaultDeleteGlueFeatures(), out);
+		writeRule(EnumRuleType.S, new Rule("S_X S_X"),
 				fReg.getDefaultGlueFeatures(), out);
-		List<Symbol> sideGlueRule2 = new ArrayList<Symbol>();
-		sideGlueRule2.add(Symbol.deserialise(-1));
-		Rule glueRule2 = new Rule(sideGlueRule2, sideGlueRule2);
-		writeRule("-1",glueRule2, new TreeMap<Integer,Double>(),
-				out);
-		List<Symbol> sideGlueRule3 = new ArrayList<>();
-		sideGlueRule3.add(Symbol.deserialise(-1));
-		Rule glueRule3 = new Rule(sideGlueRule3, sideGlueRule3);
-		writeRule("-4", glueRule3,
-				new TreeMap<Integer,Double>(), out);
-		List<Symbol> startSentenceSide = new ArrayList<Symbol>();
-		startSentenceSide.add(Symbol.deserialise(1));
-		Rule startSentence = new Rule(startSentenceSide, startSentenceSide);
-		writeRule("-1", startSentence,
+		writeRule(EnumRuleType.X, new Rule("V V"),
+				new TreeMap<Integer, Double>(), out);
+		writeRule(EnumRuleType.S, new Rule("1 1"),
 				fReg.getDefaultGlueStartOrEndFeatures(), out);
-		List<Symbol> endSentenceSide = new ArrayList<Symbol>();
-		endSentenceSide.add(Symbol.deserialise(2));
-		Rule endSentence = new Rule(endSentenceSide, endSentenceSide);
-		writeRule("-1", endSentence,
+		writeRule(EnumRuleType.X, new Rule("2 2"),
 				fReg.getDefaultGlueStartOrEndFeatures(), out);
 	}
 
@@ -270,11 +272,13 @@ public class RuleRetriever {
 		for (int i = 0; i < readers.length; ++i) {
 			queries.add(new HashSet<RuleString>());
 		}
+		targetSideVocab.add(Collections.emptySet());
 		try (BufferedReader reader = new BufferedReader(new FileReader(
 				testFileName))) {
-			int count = 0;
+			int count = 1;
 			for (String line = reader.readLine(); line != null; line = reader
-					.readLine()) {
+					.readLine(), ++count) {
+				targetSideVocab.add(new HashSet<>());
 				StopWatch stopWatch = new StopWatch();
 				stopWatch.start();
 				Set<Rule> rules = patternInstanceCreator
@@ -283,6 +287,10 @@ public class RuleRetriever {
 				for (Rule rule : rules) {
 					RuleString source = rule.source();
 					sources.add(source);
+					if (!sourceToSentenceId.containsKey(source)) {
+						sourceToSentenceId.put(source, new HashSet<>());
+					}
+					sourceToSentenceId.get(source).add(count);
 				}
 				for (RuleString source : sources) {
 					if (filter.filterSource(source)) {
@@ -292,7 +300,7 @@ public class RuleRetriever {
 							queries.size());
 					queries.get(partition).add(source);
 				}
-				System.out.println("Creating patterns for line " + ++count
+				System.out.println("Creating patterns for line " + count
 						+ " took " + (double) stopWatch.getTime() / 1000d
 						+ " seconds");
 			}
@@ -300,19 +308,18 @@ public class RuleRetriever {
 		return queries;
 	}
 
-	public static void writeRule(String LHS, Rule rule,
-			SortedMap<Integer, Double> processedFeatures, BufferedWriter out) {
+	public void writeRule(EnumRuleType LHS, Rule rule,
+			Map<Integer, Double> processedFeatures, BufferedWriter out) {
 		StringBuilder res = new StringBuilder();
-		res.append(LHS).append(" ").append(rule.toIntString());
-		for (int featureIndex : processedFeatures.keySet()) {
-			double featureValue = processedFeatures.get(featureIndex);
-			// one-based index
-			int index = featureIndex;
+		res.append(LHS.getLhs()).append(" ").append(rule);
+		for (int i = 0; i < noOfFeatures; ++i) {
+			// Features are 1-indexed
+			double featureValue = processedFeatures.containsKey(i + 1) ? -1
+					* processedFeatures.get(i + 1) : 0.0;
 			if (Math.floor(featureValue) == featureValue) {
-				int featureValueInt = (int) featureValue;
-				res.append(String.format(" %d@%d", featureValueInt, index));
+				res.append(String.format(" %d", (int) featureValue));
 			} else {
-				res.append(String.format(" %f@%d", featureValue, index));
+				res.append(String.format(" %f", featureValue));
 			}
 		}
 		res.append("\n");
@@ -349,8 +356,8 @@ public class RuleRetriever {
 		StopWatch stopWatch = new StopWatch();
 		stopWatch.start();
 		System.err.println("Generating query");
-		List<Set<RuleString>> queries = retriever.generateQueries(params.testFile,
-				params);
+		List<Set<RuleString>> queries = retriever.generateQueries(
+				params.testFile, params);
 		System.err.printf("Query took %d seconds to generate\n",
 				stopWatch.getTime() / 1000);
 		System.err.println("Executing queries");
@@ -358,7 +365,6 @@ public class RuleRetriever {
 				new GZIPOutputStream(new FileOutputStream(params.rules))))) {
 			ExecutorService threadPool = Executors
 					.newFixedThreadPool(params.retrievalThreads);
-
 			for (int i = 0; i < queries.size(); ++i) {
 				HFileRuleQuery query = new HFileRuleQuery(retriever.readers[i],
 						retriever.bfs[i], out, queries.get(i), retriever,
@@ -370,37 +376,52 @@ public class RuleRetriever {
 			// Add pass through rule not already found in query
 			for (Rule passThroughRule : retriever.passThroughRules) {
 				if (!retriever.foundPassThroughRules.contains(passThroughRule)) {
-					writeRule(EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs(), passThroughRule,
+					retriever.writeRule(EnumRuleType.X, passThroughRule,
 							retriever.fReg.getDefaultPassThroughRuleFeatures(),
 							out);
 				}
 			}
 			// Add Deletion and OOV rules
 			Rule deletionRuleWritable = new Rule();
-			RuleString zero = new RuleString();
-			zero.add(Symbol.deserialise(0));
-			deletionRuleWritable.setTarget(zero);
+			RuleString dr = new RuleString();
+			dr.add(Symbol.deserialise(-7));
+			deletionRuleWritable.setTarget(dr);
 			Rule oovRuleWritable = new Rule();
-			oovRuleWritable.setTarget(new RuleString());
+			RuleString oov = new RuleString();
+			oov.add(Symbol.deserialise(-6));
+			oovRuleWritable.setTarget(oov);
 			for (RuleString source : retriever.testVocab) {
-				// Write deletion rule
+				// If in the vocab then write deletion rule
 				if (retriever.foundTestVocab.contains(source)) {
 					deletionRuleWritable.setSource(source);
-					writeRule(EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs(), deletionRuleWritable,
+					retriever.writeRule(EnumRuleType.D, deletionRuleWritable,
 							retriever.fReg.getDefaultDeletionFeatures(), out);
 					// Otherwise is an OOV
 				} else {
 					oovRuleWritable.setSource(source);
-					writeRule(EnumRuleType.PASSTHROUGH_OOV_DELETE.getLhs(), oovRuleWritable,
+					retriever.writeRule(EnumRuleType.X, oovRuleWritable,
 							retriever.fReg.getDefaultOOVFeatures(), out);
 				}
 			}
 			// Glue rules
 			retriever.writeGlueRules(out);
-		
 		}
 		System.out.println(retriever.foundPassThroughRules);
 		System.out.println(retriever.foundTestVocab);
+		if (retriever.targetVocabFile != null) {
+			try (BufferedWriter out = new BufferedWriter(new FileWriter(
+					retriever.targetVocabFile))) {
+				for (Set<Symbol> words : retriever.targetSideVocab.subList(1,
+						retriever.targetSideVocab.size())) {
+					out.write("1 2");
+					for(Symbol word : words){
+						out.write(" " + word);
+					}
+					out.write("\n");
+				}
+				
+			}
+		}
 	}
 
 }

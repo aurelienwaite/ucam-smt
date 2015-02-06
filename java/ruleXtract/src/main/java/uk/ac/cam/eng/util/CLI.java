@@ -160,6 +160,9 @@ public final class CLI {
 
 		@Parameter(names = { "--rules" }, description = "Output file containing filtered rules")
 		public String rules;
+		
+		@Parameter(names = { "--vocab" }, description = "Output file containing vocab to be used for language model filtering")
+		public String vocab;
 
 		@ParametersDelegate
 		public FilterParams fp = new FilterParams();
