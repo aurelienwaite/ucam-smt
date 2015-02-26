@@ -16,6 +16,9 @@
 package uk.ac.cam.eng.extraction.hadoop.merge;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
@@ -38,7 +41,9 @@ import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TargetFeatureList;
 import uk.ac.cam.eng.extraction.hadoop.util.SimpleHFileOutputFormat;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
+import uk.ac.cam.eng.rule.filtering.RuleFilter;
 import uk.ac.cam.eng.util.CLI;
+import uk.ac.cam.eng.util.CLI.FilterParams;
 import uk.ac.cam.eng.util.Pair;
 
 import com.beust.jcommander.ParameterException;
@@ -70,8 +75,8 @@ public class MergeJob extends Configured implements Tool {
 		private RuleData ruleData = new RuleData();
 
 		@Override
-		protected void map(Rule key, ExtractedData value,
-				Context context) throws IOException, InterruptedException {
+		protected void map(Rule key, ExtractedData value, Context context)
+				throws IOException, InterruptedException {
 			ruleData.setProvCounts(value.getProvenanceCountMap());
 			ruleData.setAlignments(value.getAlignmentCountMapWritable());
 			context.write(key, ruleData);
@@ -99,7 +104,51 @@ public class MergeJob extends Configured implements Tool {
 
 		private TargetFeatureList list = new TargetFeatureList();
 
+		private List<Pair<Rule, RuleData>> unfiltered = new ArrayList<>();
+
 		private RuleString source = new RuleString();
+
+		private RuleFilter filter;
+
+		@Override
+		protected void setup(
+				Reducer<Rule, RuleData, RuleString, TargetFeatureList>.Context context)
+				throws IOException, InterruptedException {
+			super.setup(context);
+			Configuration conf = context.getConfiguration();
+			FilterParams params = new FilterParams();
+			params.minSource2TargetPhrase = Double.parseDouble(conf
+					.get(FilterParams.MIN_SOURCE2TARGET_PHRASE));
+			params.minTarget2SourcePhrase = Double.parseDouble(conf
+					.get(FilterParams.MIN_TARGET2SOURCE_PHRASE));
+			params.minSource2TargetRule = Double.parseDouble(conf
+					.get(FilterParams.MIN_SOURCE2TARGET_RULE));
+			params.minTarget2SourceRule = Double.parseDouble(conf
+					.get(FilterParams.MIN_TARGET2SOURCE_RULE));
+			params.provenanceUnion = conf.getBoolean(
+					FilterParams.PROVENANCE_UNION, false);
+			params.allowedPatternsFile = conf
+					.get(FilterParams.ALLOWED_PATTERNS);
+			params.sourcePatterns = conf.get(FilterParams.SOURCE_PATTERNS);
+			filter = new RuleFilter(params, conf);
+		}
+
+		private void writeOutput(Context context) throws IOException,
+				InterruptedException {
+			if (!filter.filterSource(source)) {
+				Map<Rule, RuleData> filtered = filter.filter(
+						source.toPattern(), unfiltered);
+				for (Map.Entry<Rule, RuleData> entry : filtered.entrySet()) {
+					list.add(Pair.createPair(entry.getKey().target(),
+							entry.getValue()));
+				}
+				if (!list.isEmpty()) {
+					context.write(source, list);
+				}
+			}
+			unfiltered.clear();
+			list.clear();
+		}
 
 		@Override
 		protected void reduce(Rule key, Iterable<RuleData> values,
@@ -109,8 +158,7 @@ public class MergeJob extends Configured implements Tool {
 				source.set(key.source());
 			}
 			if (!source.equals(key.source())) {
-				context.write(source, list);
-				list.clear();
+				writeOutput(context);
 				source.set(key.source());
 			}
 			RuleData ruleData = new RuleData();
@@ -119,21 +167,21 @@ public class MergeJob extends Configured implements Tool {
 			}
 			RuleString target = new RuleString();
 			target.set(key.target());
-			list.add(Pair.createPair(target, ruleData));
+			unfiltered.add(Pair.createPair(new Rule(source, target), ruleData));
 		}
 
 		@Override
 		protected void cleanup(Context context) throws IOException,
 				InterruptedException {
 			super.cleanup(context);
-			context.write(source, list);
+			writeOutput(context);
 		}
 	}
 
 	public static Job getJob(Configuration conf) throws IOException {
 
 		conf.set("mapred.map.child.java.opts", "-Xmx200m");
-		conf.set("mapred.reduce.child.java.opts", "-Xmx10240m");
+		conf.set("mapred.reduce.child.java.opts", "-Xmx5000m");
 
 		Job job = new Job(conf);
 		job.setJarByClass(MergeJob.class);

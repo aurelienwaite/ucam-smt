@@ -56,10 +56,10 @@ import org.apache.hadoop.mapreduce.lib.partition.HashPartitioner;
 import uk.ac.cam.eng.extraction.Rule;
 import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.Symbol;
-import uk.ac.cam.eng.extraction.Terminal;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.rule.features.Feature;
 import uk.ac.cam.eng.rule.features.FeatureRegistry;
+import uk.ac.cam.eng.rule.filtering.RuleFilter;
 import uk.ac.cam.eng.util.CLI;
 
 import com.beust.jcommander.ParameterException;
@@ -86,13 +86,11 @@ public class RuleRetriever {
 
 	RuleFilter filter;
 
-	private String passThroughRulesFileName;
-
-	Set<Rule> passThroughRules;
+	Set<Rule> passThroughRules = new HashSet<>();
 
 	Set<Rule> foundPassThroughRules = new HashSet<>();
 
-	Set<RuleString> testVocab;
+	Set<RuleString> testVocab = new HashSet<>();
 
 	Set<RuleString> foundTestVocab = new HashSet<>();
 
@@ -114,12 +112,16 @@ public class RuleRetriever {
 				params.rp.prov.provenance);
 		noOfFeatures = fReg.getFeatureIndices(fReg.getFeatures().toArray(
 				new Feature[0])).length;
-		passThroughRulesFileName = params.passThroughRules;
-		filter = new RuleFilter(params.fp, fReg);
+		filter = new RuleFilter(params.fp, new Configuration());
 		maxSourcePhrase = params.rp.maxSourcePhrase;
-		passThroughRules = getPassThroughRules();
+		Set<RuleString> passThroughVocab = new HashSet<>();
 		Set<RuleString> fullTestVocab = getTestVocab(testFile);
-		Set<RuleString> passThroughVocab = getPassThroughVocab();
+		for(Rule r : getPassThroughRules(params.passThroughRules)){
+			if(fullTestVocab.contains(r.source())){
+				passThroughVocab.add(r.source());
+				passThroughRules.add(r);
+			}
+		}
 		testVocab = new HashSet<>();
 		for (RuleString word : fullTestVocab) {
 			if (!passThroughVocab.contains(word)) {
@@ -159,7 +161,7 @@ public class RuleRetriever {
 		}
 	}
 
-	private Set<Rule> getPassThroughRules() throws IOException {
+	private Set<Rule> getPassThroughRules(String passThroughRulesFileName) throws IOException {
 		Set<Rule> res = new HashSet<>();
 		try (BufferedReader br = new BufferedReader(new FileReader(
 				passThroughRulesFileName))) {
@@ -172,10 +174,8 @@ public class RuleRetriever {
 					String[] sourceString = matcher.group(1).split(" ");
 					String[] targetString = matcher.group(2).split(" ");
 					if (sourceString.length != targetString.length) {
-						System.err
-								.println("Malformed pass through rules file: "
+						throw new IOException("Malformed pass through rules file: "
 										+ passThroughRulesFileName);
-						System.exit(1);
 					}
 					List<Symbol> source = new ArrayList<Symbol>();
 					List<Symbol> target = new ArrayList<Symbol>();
@@ -196,43 +196,14 @@ public class RuleRetriever {
 					Rule rule = new Rule(source, target);
 					res.add(rule);
 				} else {
-					System.err.println("Malformed pass through rules file: "
+					throw new IOException("Malformed pass through rules file: "
 							+ passThroughRulesFileName);
-					System.exit(1);
 				}
 			}
 		}
 		return res;
 	}
 
-	private Set<RuleString> getPassThroughVocab() throws IOException {
-		// TODO simplify all template writing
-		// TODO getAsciiVocab is redundant with getAsciiConstraints
-		Set<RuleString> res = new HashSet<>();
-		try (BufferedReader br = new BufferedReader(new FileReader(
-				passThroughRulesFileName))) {
-			String line;
-			Pattern regex = Pattern.compile(".*: (.*) # (.*)");
-			while ((line = br.readLine()) != null) {
-				Matcher matcher = regex.matcher(line);
-				if (matcher.matches()) {
-					String[] sourceString = matcher.group(1).split(" ");
-					// only one word
-					if (sourceString.length == 1) {
-						RuleString v = new RuleString();
-						v.add(Symbol.deserialise(sourceString[0]));
-						res.add(v);
-					}
-				} else {
-					System.err
-							.println("Malformed pass through rules constraint file: "
-									+ passThroughRulesFileName);
-					System.exit(1);
-				}
-			}
-		}
-		return res;
-	}
 
 	private Set<RuleString> getTestVocab(String testFile)
 			throws FileNotFoundException, IOException {
@@ -419,7 +390,6 @@ public class RuleRetriever {
 					}
 					out.write("\n");
 				}
-				
 			}
 		}
 	}

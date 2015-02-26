@@ -30,7 +30,7 @@ class ExtractSpec extends FlatSpec with Matchers {
   def getSource(f: String) =
     Source.fromInputStream(new GZIPInputStream(this.getClass.getClassLoader.getResourceAsStream(f)))
 
-  def readOldDiff(oldIter: Iterator[String]) : String = {
+  def readOldDiff(oldIter: Iterator[String]): String = {
     val rules = new ArrayBuffer[String]
     for (line <- oldIter) {
       if (line == "--") {
@@ -46,7 +46,7 @@ class ExtractSpec extends FlatSpec with Matchers {
   def diffs(): Int = {
     RuleExtractorTest.folder.create()
     RuleExtractorTest.setupFileSystem()
-    val opt = new ExtractOptions(9, 5, 5, 10, true)
+    val opt = new ExtractOptions(9, 5, 5, 10, true, true)
     val extract = Extract.extract(opt)_
     var diffs = 0
     for (
@@ -56,7 +56,7 @@ class ExtractSpec extends FlatSpec with Matchers {
     ) {
       val key = new MapWritable()
       val value = new TextArrayWritable()
-      val offset = 0 
+      val offset = 0
       var count = offset
       for (i <- 0 until offset) {
         reader.next(key, value)

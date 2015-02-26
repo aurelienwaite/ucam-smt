@@ -16,23 +16,14 @@
 
 package uk.ac.cam.eng.extraction;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -41,7 +32,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.SequenceFile;
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -53,7 +43,6 @@ import org.junit.rules.TemporaryFolder;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.TextArrayWritable;
 import uk.ac.cam.eng.extraction.hadoop.features.phrase.Source2TargetJob;
 import uk.ac.cam.eng.extraction.hadoop.features.phrase.Target2SourceJob;
-import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.Pair;
 
 /**
@@ -70,6 +59,20 @@ public class RuleExtractorTest {
 	public static Configuration conf;
 	public static File trainingDataFile;
 
+	
+	public static File copyDataToTestDir(String resource) throws IOException{
+		File output = folder.newFile();
+		try (OutputStream writer = new FileOutputStream(output)) {
+			try (InputStream rulesFile = conf.getClass().getResourceAsStream(
+					resource)) {
+				for (int in = rulesFile.read(); in != -1; in = rulesFile.read()) {
+					writer.write(in);
+				}
+			}
+		}
+		return output;
+	}
+	
 	@BeforeClass
 	public static void setupFileSystem() throws IOException {
 		// Ensure hadoop to use local file system
@@ -77,15 +80,7 @@ public class RuleExtractorTest {
 		FileSystem.setDefaultUri(conf, LOCAL_URI);
 		FileSystem fs = FileSystem.get(conf);
 		fs.setWorkingDirectory(new Path(folder.getRoot().getAbsolutePath()));
-		trainingDataFile = folder.newFile();
-		try (OutputStream writer = new FileOutputStream(trainingDataFile)) {
-			try (InputStream rulesFile = conf.getClass().getResourceAsStream(
-					TRAINING_DATA)) {
-				for (int in = rulesFile.read(); in != -1; in = rulesFile.read()) {
-					writer.write(in);
-				}
-			}
-		}
+		trainingDataFile = copyDataToTestDir(TRAINING_DATA);
 	}
 	
 	@AfterClass
@@ -130,7 +125,7 @@ public class RuleExtractorTest {
 			MapWritable key = new MapWritable();
 			TextArrayWritable val = new TextArrayWritable();
 			List<Rule> rules = new ArrayList<>();
-			ExtractOptions opts = new ExtractOptions(9, 5, 5, 10, true);
+			ExtractOptions opts = new ExtractOptions(9, 5, 5, 10, true, true);
 			int count = 0;
 			while (reader.next(key, val) && count < 1000) {
 				String src = val.get()[0].toString();

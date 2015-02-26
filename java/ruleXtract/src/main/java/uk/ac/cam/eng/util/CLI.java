@@ -64,6 +64,10 @@ public final class CLI {
 				+ "generates hiero rule <a X, d X> twice but the count is "
 				+ "still one)")
 		public boolean removeMonotonicRepeats = true;
+		
+		public static final String COMPATIBILITY_MODE = "--compatibility_mode";
+		@Parameter(names = { COMPATIBILITY_MODE }, description = "Replicates old-style rule extraction")
+		public boolean compability_mode = false;
 
 		@ParametersDelegate
 		public RuleParameters rp = new RuleParameters();
@@ -89,6 +93,9 @@ public final class CLI {
 
 		@Parameter(names = { "--output", "-o" }, description = "Output directory on HDFS that will contain rules and features in HFile format", required = true)
 		public String output;
+		
+		@ParametersDelegate
+		public FilterParams fp = new FilterParams();
 	}
 
 	@Parameters(separators = "=")
@@ -108,26 +115,32 @@ public final class CLI {
 
 	@Parameters(separators = "=")
 	public static class FilterParams {
-		@Parameter(names = { "--min_source2target_phrase" }, description = "Minimum source to target probability for phrase based rules", required = true)
+		public static final String MIN_SOURCE2TARGET_PHRASE = "--min_source2target_phrase";
+		@Parameter(names = {MIN_SOURCE2TARGET_PHRASE}, description = "Minimum source to target probability for phrase based rules", required = true)
 		public double minSource2TargetPhrase;
 
-		@Parameter(names = { "--min_target2source_phrase" }, description = "Minimum target to source probability for phrase based rules", required = true)
+		public static final String MIN_TARGET2SOURCE_PHRASE =  "--min_target2source_phrase";
+		@Parameter(names = {MIN_TARGET2SOURCE_PHRASE }, description = "Minimum target to source probability for phrase based rules", required = true)
 		public double minTarget2SourcePhrase;
 
-		@Parameter(names = { "--min_source2target_rule" }, description = "Minimum source to target probability for hierarchical rules", required = true)
+		public static final String MIN_SOURCE2TARGET_RULE = "--min_source2target_rule" ;
+		@Parameter(names = {MIN_SOURCE2TARGET_RULE }, description = "Minimum source to target probability for hierarchical rules", required = true)
 		public double minSource2TargetRule;
 
-		@Parameter(names = { "--min_target2source_rule" }, description = "Minimum target to source probability for hierarchical rules", required = true)
+		public static final String MIN_TARGET2SOURCE_RULE = "--min_target2source_rule" ;
+		@Parameter(names = {MIN_TARGET2SOURCE_RULE }, description = "Minimum target to source probability for hierarchical rules", required = true)
 		public double minTarget2SourceRule;
 
-		@Parameter(names = { "--provenance_union" }, description = "Union rules extracted from different provenances")
+		public static final String PROVENANCE_UNION = "--provenance_union";
+		@Parameter(names = { PROVENANCE_UNION }, description = "Union rules extracted from different provenances")
 		public boolean provenanceUnion;
 
-		@Parameter(names = { "--allowed_patterns" }, description = "File containing a list of allowed rule patterns", required = true)
+		public static final String ALLOWED_PATTERNS =  "--allowed_patterns";
+		@Parameter(names = {ALLOWED_PATTERNS }, description = "File containing a list of allowed rule patterns", required = true)
 		public String allowedPatternsFile;
 	
-
-		@Parameter(names = { "--source_patterns" }, description = "File containing a list of allowed source patterns", required = true)
+		public static final String SOURCE_PATTERNS = "--source_patterns";
+		@Parameter(names = { SOURCE_PATTERNS }, description = "File containing a list of allowed source patterns", required = true)
 		public String sourcePatterns;
 	}
 

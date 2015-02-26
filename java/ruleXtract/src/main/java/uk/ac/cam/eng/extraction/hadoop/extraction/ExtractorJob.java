@@ -141,8 +141,10 @@ public class ExtractorJob extends Configured implements Tool {
 			int maxNonTerminalSpan = conf.getInt(CLI.RuleParameters.MAX_NONTERMINAL_SPAN, -1);
 			boolean removeMonotonicRepeats = conf.getBoolean(CLI.ExtractorJobParameters.REMOVE_MONOTONIC_REPEATS,
 					false);
+			boolean compatabilityMode = conf.getBoolean(CLI.ExtractorJobParameters.COMPATIBILITY_MODE,
+					false);
 			ExtractOptions opts = new ExtractOptions(maxSourcePhrase, maxSourceElements, maxTerminalLength, 
-					maxNonTerminalSpan, removeMonotonicRepeats);
+					maxNonTerminalSpan, removeMonotonicRepeats, compatabilityMode);
 			
 			for (Pair<Rule, Alignment> ra : Extract.extractJava(opts, sourceSentence, targetSentence, wordAlign)) {
 				ruleInfo.clear();

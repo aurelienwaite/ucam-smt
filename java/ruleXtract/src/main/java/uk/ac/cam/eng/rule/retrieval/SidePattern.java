@@ -51,7 +51,7 @@ public class SidePattern {
 		return pattern.get(index);
 	}
 
-	static SidePattern parsePattern(String patternString) {
+	public static SidePattern parsePattern(String patternString) {
 		String[] parts = patternString.split("_");
 		List<String> elements = new ArrayList<String>();
 		for (String part : parts) {
@@ -73,7 +73,7 @@ public class SidePattern {
 		return (pattern.size() == 1 && pattern.get(0).equals("w"));
 	}
 
-	boolean hasMoreThan1NT() {
+	public boolean hasMoreThan1NT() {
 		return (numberOfNT > 1);
 	}
 

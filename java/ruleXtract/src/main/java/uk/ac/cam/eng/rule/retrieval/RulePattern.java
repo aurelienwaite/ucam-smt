@@ -37,7 +37,7 @@ public class RulePattern {
 		this.targetPattern = targetPattern;
 	}
 
-	static RulePattern parsePattern(String patternString) {
+	public static RulePattern parsePattern(String patternString) {
 		// X_W-W_X
 		String[] sourceTarget = patternString.split("-");
 		if (sourceTarget.length != 2) {

@@ -64,7 +64,9 @@ public final class Util {
 				Class<?> clazz = val.getClass();
 				if (Integer.class == clazz) {
 					conf.setInt(name, (Integer) val);
-				} else if (Boolean.class == clazz) {
+				}else if (Double.class == clazz) {
+					conf.set(name, val.toString()); 
+				}else if (Boolean.class == clazz) {
 					conf.setBoolean(name, (Boolean) val);
 				} else if (String.class == clazz) {
 					conf.set(name, (String) val);

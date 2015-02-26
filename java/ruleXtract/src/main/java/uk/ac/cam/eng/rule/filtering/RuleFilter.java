@@ -17,14 +17,14 @@
  * 
  */
 
-package uk.ac.cam.eng.rule.retrieval;
+package uk.ac.cam.eng.rule.filtering;
 
 // TODO remove hard coded indices
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -36,6 +36,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ByteWritable;
 import org.apache.hadoop.io.IntWritable;
 
@@ -44,7 +47,8 @@ import uk.ac.cam.eng.extraction.RuleString;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.IntWritableCache;
 import uk.ac.cam.eng.extraction.hadoop.datatypes.RuleData;
 import uk.ac.cam.eng.rule.features.Feature;
-import uk.ac.cam.eng.rule.features.FeatureRegistry;
+import uk.ac.cam.eng.rule.retrieval.RulePattern;
+import uk.ac.cam.eng.rule.retrieval.SidePattern;
 import uk.ac.cam.eng.util.CLI;
 import uk.ac.cam.eng.util.Pair;
 
@@ -55,7 +59,7 @@ import uk.ac.cam.eng.util.Pair;
  * @author Aurelien Waite
  * @date 28 May 2014
  */
-class RuleFilter {
+public class RuleFilter {
 
 	private static class RuleCountComparator implements
 			Comparator<Pair<Rule, RuleData>> {
@@ -66,8 +70,8 @@ class RuleFilter {
 			this.countIndex = new ByteWritable((byte) countIndex);
 		}
 
-		public int compare(Pair<Rule, RuleData> a,
-				Pair<Rule, RuleData> b) {
+		@Override
+		public int compare(Pair<Rule, RuleData> a, Pair<Rule, RuleData> b) {
 			int aValue = a.getSecond().getProvCounts().containsKey(countIndex) ? a
 					.getSecond().getProvCounts().get(countIndex).get()
 					: 0;
@@ -107,16 +111,16 @@ class RuleFilter {
 
 	boolean provenanceUnion;
 
-	public RuleFilter(CLI.FilterParams params, FeatureRegistry fReg)
+	public RuleFilter(CLI.FilterParams params, Configuration conf)
 			throws FileNotFoundException, IOException {
 		provenanceUnion = params.provenanceUnion;
 		minSource2TargetPhraseLog = Math.log(params.minSource2TargetPhrase);
 		minTarget2SourcePhraseLog = Math.log(params.minTarget2SourcePhrase);
 		minSource2TargetRuleLog = Math.log(params.minSource2TargetRule);
 		minTarget2SourceRuleLog = Math.log(params.minTarget2SourceRule);
-		loadConfig(params.allowedPatternsFile,
+		loadConfig(params.allowedPatternsFile, conf,
 				line -> allowedPatterns.add(RulePattern.parsePattern(line)));
-		loadConfig(params.sourcePatterns,
+		loadConfig(params.sourcePatterns, conf,
 				line -> {
 					String[] parts = line.split(" ");
 					if (parts.length != 3) {
@@ -129,9 +133,12 @@ class RuleFilter {
 				});
 	}
 
-	private void loadConfig(String fileName, Consumer<String> block)
-			throws FileNotFoundException, IOException {
-		try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
+	private void loadConfig(String fileName, Configuration conf,
+			Consumer<String> block) throws FileNotFoundException, IOException {
+		Path path = new Path(fileName);
+		FileSystem fs = path.getFileSystem(conf);
+		try (BufferedReader br = new BufferedReader(new InputStreamReader(
+				fs.open(path)))) {
 			for (String line = br.readLine(); line != null; line = br
 					.readLine()) {
 				if (line.startsWith("#") || line.isEmpty()) {
@@ -152,8 +159,7 @@ class RuleFilter {
 		return true;
 	}
 
-	private Map<Rule, RuleData> filterRulesBySource(
-			SidePattern sourcePattern,
+	private Map<Rule, RuleData> filterRulesBySource(SidePattern sourcePattern,
 			List<Pair<Rule, RuleData>> rules, int provMapping) {
 		Map<Rule, RuleData> results = new HashMap<>();
 		// If the source side is a phrase, then we want everything
@@ -179,8 +185,7 @@ class RuleFilter {
 			boolean moreThan1NT = sourcePattern.hasMoreThan1NT();
 			if (notTied
 					&& ((moreThan1NT
-							&& nTransConstraint <= numberTranslationsMonotone && nTransConstraint <= numberTranslationsInvert) 
-							|| (!moreThan1NT && nTransConstraint <= numberTranslations))) {
+							&& nTransConstraint <= numberTranslationsMonotone && nTransConstraint <= numberTranslationsInvert) || (!moreThan1NT && nTransConstraint <= numberTranslations))) {
 				break;
 			}
 			results.put(entry.getFirst(), entry.getSecond());
@@ -204,8 +209,7 @@ class RuleFilter {
 	 * @return
 	 */
 	private boolean filterRule(Feature s2t, Feature t2s,
-			SidePattern sourcePattern, Rule rule, RuleData data,
-			int provMapping) {
+			SidePattern sourcePattern, Rule rule, RuleData data, int provMapping) {
 		IntWritable provIW = IntWritableCache.createIntWritable(provMapping);
 		// Immediately filter if there is data for this rule under this
 		// provenance
@@ -257,7 +261,7 @@ class RuleFilter {
 		if (!provenanceUnion) {
 			provenances.add(0);
 		} else {
-			for (Pair<Rule, RuleData> entry : toFilter) {
+			for (Pair<?, RuleData> entry : toFilter) {
 				for (ByteWritable prov : entry.getSecond().getProvCounts()
 						.keySet()) {
 					provenances.add((int) prov.get());

@@ -31,12 +31,14 @@ import uk.ac.cam.eng.rule.retrieval.HFileRuleReader
 import scala.collection.JavaConversions._
 import uk.ac.cam.eng.rule.features.Feature
 import org.apache.hadoop.io.IntWritable
+import uk.ac.cam.eng.util.CLI.FilterParams
 
 class PipelineTest extends FunSuite with BeforeAndAfterAll {
 
   override def beforeAll(configMap: ConfigMap) {
     RuleExtractorTest.folder.create()
     RuleExtractorTest.setupFileSystem()
+    
   }
 
   override def afterAll(configMap: ConfigMap) {
@@ -66,14 +68,12 @@ class PipelineTest extends FunSuite with BeforeAndAfterAll {
     conf.setInt(CLI.RuleParameters.MAX_TERMINAL_LENGTH, 5)
     conf.setInt(CLI.RuleParameters.MAX_NONTERMINAL_SPAN, 10)
     conf.setBoolean(CLI.ExtractorJobParameters.REMOVE_MONOTONIC_REPEATS, true)
+    conf.setBoolean(CLI.ExtractorJobParameters.COMPATIBILITY_MODE, true)
     conf.set(CLI.Provenance.PROV, "all");
     val job = ExtractorJob.getJob(conf)
     FileInputFormat.setInputPaths(job, new Path(RuleExtractorTest.trainingDataFile.getAbsolutePath))
     val extractOut = new Path("extractOut")
     FileOutputFormat.setOutputPath(job, extractOut);
-    println(FileSystem.get(conf).getWorkingDirectory.getParent)
-    println(FileSystem.get(conf).getWorkingDirectory.getName)
-    println(FileSystem.get(conf).getWorkingDirectory)
     job.waitForCompletion(true);
     //printSequenceFile("extractOut/part-r-00000", conf)
     //S2T
@@ -87,6 +87,16 @@ class PipelineTest extends FunSuite with BeforeAndAfterAll {
     FileInputFormat.setInputPaths(t2sJob, extractOut)
     FileOutputFormat.setOutputPath(t2sJob, t2sOut);
     t2sJob.waitForCompletion(true)
+    conf.set(FilterParams.MIN_SOURCE2TARGET_PHRASE, "0.01");
+    conf.set(FilterParams.MIN_TARGET2SOURCE_PHRASE, "1e-10");
+    conf.set(FilterParams.MIN_SOURCE2TARGET_RULE, "0.01");
+    conf.set(FilterParams.MIN_TARGET2SOURCE_RULE, "1e-10");
+    conf.setBoolean(FilterParams.PROVENANCE_UNION, true);
+    val patternsFile = RuleExtractorTest.copyDataToTestDir("/uk/ac/cam/eng/data/CF.rulextract.patterns").toPath.toUri.toString;
+    conf.set(FilterParams.SOURCE_PATTERNS, patternsFile)
+    val allowedFile = RuleExtractorTest.copyDataToTestDir("/uk/ac/cam/eng/data/CF.rulextract.filter.allowedonly").toPath.toUri.toString;
+    conf.set(FilterParams.ALLOWED_PATTERNS, allowedFile)
+    
     val mergeJob = MergeJob.getJob(conf);
     for (featurePath <- List(s2tOut, t2sOut)) {
       MultipleInputs.addInputPath(mergeJob, featurePath,
@@ -116,31 +126,11 @@ class PipelineTest extends FunSuite with BeforeAndAfterAll {
           assertWithDelta(-1.3862943611198906)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
-        case Rule("125_4368_V_6 V_131_562_8") => {
-          assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
-          assertWithDelta(-0.6931471805599453)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
-        }
         case Rule("69040_6_67946_52926 2684_8_10719_201") => {
           assertWithDelta(-0.6931471805599453)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(-0.6931471805599453)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
-        case Rule("V_31_317_V1 V_18_7_3_450_V1") => {
-          assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
-          assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
-        }
-        case Rule("V_1176_V1_4 V_1341_4_V1_5") => {
-          assertWithDelta(-0.7472144018302211)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
-          assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
-        }
-        case Rule("94345_V_5_V1_4 4066102_V_6_V1_5") => {
-          assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
-          assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
-        }
         case Rule("117102_6_191_141_10220 87048_8_118_74_10895") => {
-          assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
-          assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
-        }
-        case Rule("198_V_5212_3_130 58_V_1758_4_65") => {
           assertWithDelta(0.0)(data.getFeatures.get(Feature.SOURCE2TARGET_PROBABILITY).get(new IntWritable(0)).get)
           assertWithDelta(0.0)(data.getFeatures.get(Feature.TARGET2SOURCE_PROBABILITY).get(new IntWritable(0)).get)
         }
@@ -151,7 +141,7 @@ class PipelineTest extends FunSuite with BeforeAndAfterAll {
         case _ => notTested += 1
       }
     }
-    assertResult(6180048)(count)
-    assertResult(10)(count - notTested)
+    assertResult(1182985)(count)
+    assertResult(5)(count - notTested)
   }
 }
