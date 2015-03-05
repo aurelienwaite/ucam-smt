@@ -81,21 +81,23 @@ void setScales ( const ucam::util::RegistryPO& rg,
  * \brief Full single-threaded Alignment lattices to Sparse lattices
  */
 
-template <class Data = AlilatsToSparseWeightLatsData<lm::ngram::Model>
-          , class KenLMModelT = lm::ngram::Model >
+template < template <class> class DataT
+           , class ArcT = void
+           >
 class SingleThreadedAliLatsToSparseVecLatsTask: public
-  ucam::util::TaskInterface<Data> {
+ucam::util::TaskInterface<DataT<TupleArc32 > > {
  private:
+  typedef DataT<TupleArc32 > Data;
   typedef ucam::fsttools::LoadWordMapTask< Data > LoadWordMap;
   typedef ucam::fsttools::WriteFstTask < Data , TupleArc32 > WriteFst;
   typedef ucam::fsttools::ReadFstTask < Data , fst::LexStdArc > ReadFst;
-  typedef ucam::fsttools::LoadLanguageModelTask < Data, KenLMModelT >
+  typedef ucam::fsttools::LoadLanguageModelTask < Data >
   LoadLanguageModel;
   typedef LoadSparseWeightFlowerLatticeTask < Data >
   LoadSparseWeightFlowerLattice;
   typedef SparseWeightVectorLatticesTask <Data, fst::LexStdArc >
   SparseWeightVectorLattices;
-  typedef ucam::fsttools::ApplyLanguageModelTask<Data, KenLMModelT, TupleArc32 >
+  typedef ucam::fsttools::ApplyLanguageModelTask<Data, TupleArc32 >
   ApplyLanguageModel;
   typedef DumpNbestFeaturesTask < Data  > DumpNbestFeatures;
 
@@ -113,36 +115,33 @@ class SingleThreadedAliLatsToSparseVecLatsTask: public
    * \brief Reads an input sentence, tokenizes and integer-maps.
    */
   bool run ( Data& d ) {
+    using namespace HifstConstants;
     unsigned numlms;
     setScales ( rg_ , &numlms);
     boost::scoped_ptr < LoadSparseWeightFlowerLattice>
     mytask (new LoadSparseWeightFlowerLattice ( rg_ , numlms,
-            HifstConstants::kSparseweightvectorlatticeLoadalilats ) );
+            kSparseweightvectorlatticeLoadalilats ) );
     mytask->appendTask
-    ( WriteFst::init ( rg_, HifstConstants::kRuleflowerlatticeStore ) )
-    ( LoadWordMap::init ( rg_, HifstConstants::kLmWordmap, true ) )
-    ( new LoadLanguageModel ( rg_, HifstConstants::kLmLoad,
-                              "" ) ) //Here, language model weights always to 1
-    ( new ReadFst ( rg_
-                    , HifstConstants::kSparseweightvectorlatticeLoadalilats ) )
+    ( WriteFst::init ( rg_, kRuleflowerlatticeStore ) )
+    ( LoadWordMap::init ( rg_, kLmWordmap, true ) )
+    ( new LoadLanguageModel ( rg_, kLmLoad, "" ) ) //Here, language model weights always to 1
+    ( new ReadFst ( rg_, kSparseweightvectorlatticeLoadalilats ) )
     ( new SparseWeightVectorLattices ( rg_
-                                       , HifstConstants::kSparseweightvectorlatticeLoadalilats
-                                       , HifstConstants::kRuleflowerlatticeStore
-                                       , HifstConstants::kSparseweightvectorlatticeStorenolm ) )
+                                       , kSparseweightvectorlatticeLoadalilats
+                                       , kRuleflowerlatticeStore
+                                       , kSparseweightvectorlatticeStorenolm ) )
     ( new ApplyLanguageModel ( rg_
-                               , HifstConstants::kLmLoad
-                               , HifstConstants::kSparseweightvectorlatticeStorenolm
-                               , HifstConstants::kSparseweightvectorlatticeStore ) )
-    ( WriteFst::init ( rg_
-                       , HifstConstants::kSparseweightvectorlatticeStore ) )
-    ( LoadWordMap::init ( rg_
-                          , HifstConstants::kSparseweightvectorlatticeWordmap ) )
+                               , kLmLoad
+                               , kSparseweightvectorlatticeStorenolm
+                               , kSparseweightvectorlatticeStore ) )
+    ( WriteFst::init ( rg_, kSparseweightvectorlatticeStore ) )
+    ( LoadWordMap::init ( rg_, kSparseweightvectorlatticeWordmap ) )
     ( DumpNbestFeatures::init ( rg_
                                 , numlms
-                                , HifstConstants::kSparseweightvectorlatticeStore ) )
+                                , kSparseweightvectorlatticeStore ) )
     ;
     for ( ucam::util::IntRangePtr ir (ucam::util::IntRangeFactory ( rg_ ,
-                                      HifstConstants::kRangeOne ) );
+                                      kRangeOne ) );
           !ir->done ();
           ir->next () ) {
       d.sidx = ir->get ();
@@ -165,21 +164,23 @@ class SingleThreadedAliLatsToSparseVecLatsTask: public
 /**
  * \brief Multithreaded implementation of alilats2splats pipeline
  */
-template <class Data = AlilatsToSparseWeightLatsData<lm::ngram::Model> , class KenLMModelT = lm::ngram::Model  >
+template < template <class> class DataT
+           , class ArcT = void
+           >
 class MultiThreadedAliLatsToSparseVecLatsTask: public
-  ucam::util::TaskInterface<Data> {
-
+ucam::util::TaskInterface<DataT<TupleArc32 > > {
  private:
+  typedef DataT<TupleArc32 > Data;
   typedef ucam::fsttools::LoadWordMapTask< Data > LoadWordMap;
   typedef ucam::fsttools::WriteFstTask < Data , TupleArc32 > WriteFst;
   typedef ucam::fsttools::ReadFstTask < Data , fst::LexStdArc > ReadFst;
-  typedef ucam::fsttools::LoadLanguageModelTask < Data, KenLMModelT >
+  typedef ucam::fsttools::LoadLanguageModelTask < Data >
   LoadLanguageModel;
   typedef LoadSparseWeightFlowerLatticeTask < Data >
   LoadSparseWeightFlowerLattice;
   typedef SparseWeightVectorLatticesTask <Data, fst::LexStdArc >
   SparseWeightVectorLattices;
-  typedef ucam::fsttools::ApplyLanguageModelTask<Data, KenLMModelT, TupleArc32 >
+  typedef ucam::fsttools::ApplyLanguageModelTask<Data, TupleArc32 >
   ApplyLanguageModel;
   typedef DumpNbestFeaturesTask < Data  > DumpNbestFeatures;
 
@@ -194,26 +195,27 @@ class MultiThreadedAliLatsToSparseVecLatsTask: public
   }
 
   bool run ( Data& original_data ) {
+    using namespace HifstConstants;
     unsigned numlms;
     setScales ( rg_ , &numlms);
     boost::scoped_ptr < LoadSparseWeightFlowerLattice>
     loadtask ( new LoadSparseWeightFlowerLattice ( rg_
                , numlms
-               , HifstConstants::kSparseweightvectorlatticeLoadalilats ) );
+               , kSparseweightvectorlatticeLoadalilats ) );
     loadtask->appendTask
-    ( WriteFst::init ( rg_  , HifstConstants::kRuleflowerlatticeStore ) )
-    ( new LoadLanguageModel ( rg_  , HifstConstants::kLmLoad,
+    ( WriteFst::init ( rg_  , kRuleflowerlatticeStore ) )
+    ( new LoadLanguageModel ( rg_  , kLmLoad,
                               "" ) ) //Forcing language model scales always to 1
-    ( LoadWordMap::init ( rg_  , HifstConstants::kLmWordmap , true ) )
+    ( LoadWordMap::init ( rg_  , kLmWordmap , true ) )
     ( LoadWordMap::init ( rg_  ,
-                          HifstConstants::kSparseweightvectorlatticeWordmap ) )
+                          kSparseweightvectorlatticeWordmap ) )
     ;
     loadtask->chainrun ( original_data ); // Load grammar and language model;
     {
       ucam::util::TrivialThreadPool tp ( threadcount_ );
       bool finished = false;
       for ( ucam::util::IntRangePtr ir (ucam::util::IntRangeFactory ( rg_ ,
-                                        HifstConstants::kRangeOne ) );
+                                       kRangeOne ) );
             !ir->done ();
             ir->next () ) {
         Data *d = new Data; //( original_data ); // reset.
@@ -223,19 +225,19 @@ class MultiThreadedAliLatsToSparseVecLatsTask: public
         d->wm = original_data.wm;
         FORCELINFO ( "=====Extract features for sentence " << d->sidx << ":" );
         ReadFst *runtask = new ReadFst ( rg_  ,
-                                         HifstConstants::kSparseweightvectorlatticeLoadalilats );
+                                         kSparseweightvectorlatticeLoadalilats );
         runtask->appendTask
         ( new SparseWeightVectorLattices ( rg_
-                                           , HifstConstants::kSparseweightvectorlatticeLoadalilats
-                                           , HifstConstants::kRuleflowerlatticeStore
-                                           , HifstConstants::kSparseweightvectorlatticeStorenolm ) )
+                                           , kSparseweightvectorlatticeLoadalilats
+                                           , kRuleflowerlatticeStore
+                                           , kSparseweightvectorlatticeStorenolm ) )
         ( new ApplyLanguageModel ( rg_
-                                   , HifstConstants::kLmLoad
-                                   , HifstConstants::kSparseweightvectorlatticeStorenolm
-                                   , HifstConstants::kSparseweightvectorlatticeStore ) )
-        ( WriteFst::init ( rg_  , HifstConstants::kSparseweightvectorlatticeStore ) )
+                                   , kLmLoad
+                                   , kSparseweightvectorlatticeStorenolm
+                                   , kSparseweightvectorlatticeStore ) )
+        ( WriteFst::init ( rg_  , kSparseweightvectorlatticeStore ) )
         ( DumpNbestFeatures::init ( rg_  , numlms,
-                                    HifstConstants::kSparseweightvectorlatticeStore ) )
+                                    kSparseweightvectorlatticeStore ) )
         ;
         tp ( ucam::util::TaskFunctor<Data> ( runtask,
                                              d ) ); //tp takes ownership of runtask and d

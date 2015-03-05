@@ -27,7 +27,8 @@
 #include "task.hifst.localpruningconditions.hpp"
 #include "task.hifst.rtn.hpp"
 #include "task.hifst.optimize.hpp"
-
+#include "task.hifst.makeweights.hpp"
+#include "task.applylm.kenlmtype.hpp"
 namespace ucam {
 namespace hifst {
 
@@ -36,11 +37,11 @@ namespace hifst {
  */
 
 template <class Data ,
-          class KenLMModelT = lm::ngram::Model,
           class Arc = fst::LexStdArc ,
           class OptimizeT = OptimizeMachine<Arc> ,
           class CYKdataT = CYKdata ,
           class MultiUnionT = fst::MultiUnionRational<Arc> ,
+          //          class MultiUnionT = fst::MultiUnionReplace<Arc> ,
           class ExpandedNumStatesRTNT = ExpandedNumStatesRTN<Arc> ,
           class ReplaceFstByArcT = ManualReplaceFstByArc<Arc> ,
           class RTNT = RTN<Arc>
@@ -116,8 +117,8 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
   /// checks whether it qualifies or not for local pruning
   LocalPruningConditions lpc_;
 
-  /// Defines a weight in the appropriate semiring (Lex or Std)
-  fst::MakeWeight2<Arc> mw_;
+  /// Defines a weight in the appropriate semiring (Lex, Std , or TupleArc)
+  MakeWeightHifst<Arc> mw_;
 
   /// Likelihood weight
   float pruneweight_;
@@ -140,7 +141,8 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
 
   //If false, no determinization/minimization will be applied anywhere to any of the components of the RTN, expanded or not.
   bool optimize_;
-
+  const ucam::util::RegistryPO& rg_;
+  //  const int localLmPos_;
  public:
 
   ///Constructor with registry object and several keys to access data object and registry
@@ -151,41 +153,51 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
                 HifstConstants::kReferencefilterNosubstringStore ,
               const std::string& lmkey = HifstConstants::kLmLoad
             ) :
-    optimize_ (rg.getBool (HifstConstants::kHifstOptimizecells) ),
-    numlocallm_ (rg.getVectorString (locallmkey).size() ),
-    warned_ (false),
-    rtnfiles_ (rg.get<std::string> (HifstConstants::kHifstWritertn) ),
-    fullreferencelatticekey_ ( fullreferencelatticekey ),
-    lmkey_ ( lmkey ),
-    locallmkey_ ( locallmkey ),
-    outputkey_ ( outputkey ),
-    piscount_ ( 0 ),
-    aligner_ ( rg.getBool ( HifstConstants::kHifstAlilatsmode ) ),
-    //    cellredm_ ( rg.getBool ( "hifst.cellredm" ) ),
-    //    finalredm_ ( rg.getBool ( "hifst.finalredm" ) ),
-    hipdtmode_ (rg.getBool (HifstConstants::kHifstUsepdt) ),
-    rtnopt_ (rg.getBool (HifstConstants::kHifstRtnopt) ),
-    replacefstbyarc_ ( rg.getSetString (
-                         HifstConstants::kHifstReplacefstbyarcNonterminals ) ),
-    replacefstbyarcexceptions_ ( rg.getSetString (
-                                   HifstConstants::kHifstReplacefstbyarcExceptions ) ),
-    replacefstbynumstates_ ( rg.get<unsigned>
-                             ( HifstConstants::kHifstReplacefstbyarcNumstates ) ),
-    localprune_ ( rg.getBool ( HifstConstants::kHifstLocalpruneEnable ) ),
-    pruneweight_ ( rg.get<float> ( HifstConstants::kHifstPrune ) ),
-    numstatesthreshold_ ( rg.get<unsigned>
-                          ( HifstConstants::kHifstLocalpruneNumstates ) ),
-    lpctuples_ ( rg.getVectorString (
-                   HifstConstants::kHifstLocalpruneConditions ) ) {
+      optimize_ (rg.getBool (HifstConstants::kHifstOptimizecells) ),
+      numlocallm_ (rg.getVectorString (locallmkey).size() ),
+      warned_ (false),
+      rtnfiles_ (rg.get<std::string> (HifstConstants::kHifstWritertn) ),
+      fullreferencelatticekey_ ( fullreferencelatticekey ),
+      lmkey_ ( lmkey ),
+      locallmkey_ ( locallmkey ),
+      outputkey_ ( outputkey ),
+      piscount_ ( 0 ),
+      aligner_ ( rg.getBool ( HifstConstants::kHifstAlilatsmode ) ),
+      //    cellredm_ ( rg.getBool ( "hifst.cellredm" ) ),
+      //    finalredm_ ( rg.getBool ( "hifst.finalredm" ) ),
+      hipdtmode_ (rg.getBool (HifstConstants::kHifstUsepdt) ),
+      rtnopt_ (rg.getBool (HifstConstants::kHifstRtnopt) ),
+      replacefstbyarc_ ( rg.getSetString (
+                             HifstConstants::kHifstReplacefstbyarcNonterminals ) ),
+      replacefstbyarcexceptions_ ( rg.getSetString (
+                                       HifstConstants::kHifstReplacefstbyarcExceptions ) ),
+      replacefstbynumstates_ ( rg.get<unsigned>
+                               ( HifstConstants::kHifstReplacefstbyarcNumstates ) ),
+      localprune_ ( rg.getBool ( HifstConstants::kHifstLocalpruneEnable ) ),
+      pruneweight_ ( rg.get<float> ( HifstConstants::kHifstPrune ) ),
+      numstatesthreshold_ ( rg.get<unsigned>
+                            ( HifstConstants::kHifstLocalpruneNumstates ) ),
+      lpctuples_ ( rg.getVectorString (
+                       HifstConstants::kHifstLocalpruneConditions ) ),
+      mw_(rg),
+      rg_(rg)
+      //      localLmPos_(rg.getVectorString(HifstConstants::kLmFeatureweights).size() + 1 + 1)
+  {
+
     LINFO ("Number of local language models=" << numlocallm_);
     LINFO ("aligner mode=" << aligner_);
     LINFO ("localprune mode=" << localprune_);
+    LINFO("reference filtering with: " << rg_.get<std::string> (HifstConstants::kReferencefilterLoad));
     USER_CHECK ( ! ( lpc_.size() % 4 ),
                  "local pruning conditions are defined by tuples of 4 elements: category,x,y,Number-of-states. Category is a string and x,y are int. Number of states is unsigned" );
-    USER_CHECK ( (localprune_ && numlocallm_) || ( localprune_ && !numlocallm_
-                 && aligner_ ) || (!localprune_) ,
-                 "If you want to do cell pruning in translation, you should  use a language model for local pruning. Check --hifst.localprune.lm.load and --hifst.localprune.enable.\n");
+    USER_CHECK ( (localprune_ && numlocallm_ )
+                 || ( localprune_ && !numlocallm_  && rg_.get<std::string> (HifstConstants::kReferencefilterLoad) != ""  )
+                 || (!localprune_) ,
+                 "If you want to do cell pruning in translation, you should  normally use a language model for local pruning. Check --hifst.localprune.lm.load and --hifst.localprune.enable.\n");
     optimize.setAlignMode (aligner_);
+
+
+
     if (hipdtmode_) {
       LINFO ("Hipdt mode enabled!");
     }
@@ -281,11 +293,14 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
         d_->stats->setTimeEnd ("replace-pdt-final");
         LINFO ("Number of pdtparens=" << pdtparens_.size() );
       }
-      LINFO ("Removing Epsilons...");
-      fst::RmEpsilon<Arc> ( &*efst );
-      LINFO ("Done! NS=" << efst->NumStates() );
-      //Apply filters
-      applyFilters ( &*efst );
+
+      // Currently no need to call this applyFilters: it will do the same
+      // and it is more efficient to compose with the normal lattice
+      // rather than the substringed lattice.
+      // LINFO ("Removing Epsilons...");
+      // fst::RmEpsilon<Arc> ( &*efst );
+      //  LINFO ("Done! NS=" << efst->NumStates() );
+      // applyFilters ( &*efst );
       //Compose with full reference lattice to ensure that final lattice is correct.
       if ( d.fsts.find ( fullreferencelatticekey_ ) != d.fsts.end() ) {
         if ( static_cast< fst::VectorFst<Arc> * >
@@ -547,9 +562,10 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
     rulefst->AddState();
     rulefst->SetStart ( 0 );
     rulefst->AddState();
+    Label iw2 = gd.getIdx ( rule_idx ) + 1;
     Label iw;
     if ( !aligner_ ) iw = 0;
-    else iw = gd.getIdx ( rule_idx ) + 1;
+    else iw = iw2;
     LINFO ("Building FST for rule " << gd.getRule ( rule_idx ) );
     unsigned kmax = translation.size();
     unsigned nonterminal = 0;
@@ -574,7 +590,7 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
       rulefst->AddArc ( k, Arc ( iw, ow, Weight::One(), k + 1 ) );
     }
     float w = gd.getWeight ( rule_idx );
-    Weight weight = mw_ ( w );
+    Weight weight = mw_ ( w , iw2 );
     rulefst->AddArc ( kmax, Arc ( iw, 0, weight, kmax + 1 ) );
     rulefst->SetFinal ( kmax + 1, Weight::One() );
     fst::VectorFst<Arc>* auxi;
@@ -622,11 +638,12 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
   inline void applyFilters ( fst::VectorFst<Arc> *fst ) {
     fst::ArcSort<Arc> ( fst, fst::OLabelCompare<Arc>() );
     /// If the original translation lattice already contains DRs/OOVs, we have the full information.
-    /// Therefore a direct composition should be enough.
+    /// Therefore a direct composition should be enough (and more efficient).
     LINFO ( "Apply " << d_->filters.size() << " filters to the search space!" );
     for ( unsigned k = 0; k < d_->filters.size(); ++k ) {
       LDBG_EXECUTE ( fst::FstWrite ( * (d_->filters[k]), "fsts/filter.fst.gz" ) );
       LDBG_EXECUTE ( fst::FstWrite ( *fst, "fsts/before-composition.fst.gz" ) );
+
       if (!hipdtmode_ || pdtparens_.empty() ) {
         LINFO ("FST composition with filter");
         *fst = (fst::ComposeFst<Arc> (*fst, *d_->filters[k]) );
@@ -647,8 +664,43 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
     }
   };
 
-  inline fst::VectorFst<Arc> *applyLanguageModel ( const fst::Fst<Arc>& localfst ,
-      const std::string& lmkey) {
+  typedef fst::ApplyLanguageModelOnTheFlyInterface<Arc> ApplyLanguageModelOnTheFlyInterfaceType;
+  typedef boost::shared_ptr<ApplyLanguageModelOnTheFlyInterfaceType> ApplyLanguageModelOnTheFlyInterfacePtrType;
+  std::vector<ApplyLanguageModelOnTheFlyInterfacePtrType> almotfLocal_;
+  std::vector<ApplyLanguageModelOnTheFlyInterfacePtrType> almotf_;
+
+  // Prepares language model application handlers for each kenlm type.
+  // i.e. an array of templated instances of ApplyLanguageModelOnTheFly
+  // Note: possibly can be refactored/merged with method initializeLanguageModelHandlers
+  // in task.applylm.hpp
+  template< template<class> class MakeWeightT>
+  void initializeLanguageModelHandlers(const std::string& lmkey
+				       , MakeWeightT<Arc> &mw
+				       , std::vector<ApplyLanguageModelOnTheFlyInterfacePtrType> &almotf) {
+    if (almotf.size()) {
+      LINFO("Skipping!");
+      return; // already done
+    }
+    almotf.resize(d_->klm[lmkey].size());
+    unordered_set<Label> epsilons;
+    for ( unsigned k = 0; k < d_->klm[lmkey].size(); ++k ) {
+      USER_CHECK ( d_->klm[lmkey][k]->model != NULL,
+		   "Language model " << k << " not available!" );
+      almotf[k].reset(fsttools::assignKenLmHandler<Arc, MakeWeightT >(rg_, lmkey, epsilons
+								      , *(d_->klm[lmkey][k])
+								      , mw, true,k));	       
+      mw.update();
+    }
+    LINFO("Initialized " << d_->klm[lmkey].size() << " language model handlers");
+  }
+
+  // \todo Merge/refactor this code with task.applylm.hpp.
+  template< template<class> class MakeWeightT>
+  inline fst::VectorFst<Arc> *applyLanguageModel ( const fst::Fst<Arc>& localfst
+                                                   , const std::string& lmkey
+                                                   , MakeWeightT<Arc> &mw
+						   , std::vector<ApplyLanguageModelOnTheFlyInterfacePtrType> &almo
+                                                   ) {
     if ( d_->klm.find ( lmkey ) == d_->klm.end() ) {
       if (!warned_) {
         FORCELINFO ( "No Language models for key=" << lmkey
@@ -657,48 +709,35 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
       warned_ = true;
       return NULL;
     }
-    fst::VectorFst<Arc> *output = new fst::VectorFst<Arc> (*
-        (const_cast<fst::Fst<Arc> *> ( &localfst ) ) );
+    
+    fst::VectorFst<Arc> *output
+      = new fst::VectorFst<Arc> (* (const_cast<fst::Fst<Arc> *> ( &localfst ) ) );
+
+    // unfortunately they can be lattice-specific (pdt parentheses)
+    unordered_set<Label> epsilons;
+    epsilons.insert ( DR );
+    epsilons.insert ( OOV );
+    epsilons.insert ( EPSILON );
+    epsilons.insert ( SEP );
+    // If it is a pdt, add all parentheses so they get treated as epsilons too
+    // for this particular lattice
+    for (unsigned j = 0; j < pdtparens_.size(); ++j) {
+      epsilons.insert (pdtparens_[j].first);
+      epsilons.insert (pdtparens_[j].second);
+    }
+
     for ( unsigned k = 0; k < d_->klm[lmkey].size(); ++k ) {
-      USER_CHECK ( d_->klm[lmkey][k] != NULL, "Language model pointer is NULL!" );
-      KenLMModelT& model = *d_->klm[lmkey][k]->model;
-#ifndef USE_GOOGLE_SPARSE_HASH
-      unordered_set<Label> epsilons;
-#else
-      google::dense_hash_set<Label> epsilons;
-      epsilons.set_empty_key ( std::numeric_limits<Label>::max() );
-#endif
-      //We want our language model to ignore these guys:
-      epsilons.insert ( DR );
-      epsilons.insert ( OOV );
-      epsilons.insert ( EPSILON );
-      epsilons.insert ( SEP );
-      //If it is a pdt, add all parentheses so they get treated as epsilons too
-      for (unsigned j = 0; j < pdtparens_.size(); ++j) {
-        epsilons.insert (pdtparens_[j].first);
-        epsilons.insert (pdtparens_[j].second);
-      }
       LINFO ( "Composing with " << k << "-th language model" );
       d_->stats->setTimeStart ( "on-the-fly-composition "
                                 +  ucam::util::toString ( k ) );
-      boost::scoped_ptr<fst::ApplyLanguageModelOnTheFly<Arc, fst::MakeWeight<Arc>, KenLMModelT > >
-      f ( new fst::ApplyLanguageModelOnTheFly<Arc
-          , fst::MakeWeight<Arc>
-          , KenLMModelT> ( *output,
-                           model,
-                           epsilons,
-                           true,
-                           d_->klm[lmkey][k]->lmscale ,
-                           d_->klm[lmkey][k]->lmwp ,
-                           d_->klm[lmkey][k]->idb ) );
-      fst::VectorFst<Arc> *aux = ( *f ) ();
+      fst::VectorFst<Arc> *aux = almo[k]->run(*output, epsilons);
       if ( !aux ) {
         LERROR ("Something very wrong happened in composition with the lm...");
         exit (EXIT_FAILURE);
       }
-      *output = *aux;
-      d_->stats->setTimeEnd ( "on-the-fly-composition " + ucam::util::toString (
-                                k ) );
+      delete output; output = aux;
+      d_->stats->setTimeEnd ( "on-the-fly-composition "
+                              + ucam::util::toString ( k ) );
       LDEBUG ( "After applying language model, NS=" <<  output->NumStates() );
     }
     LINFO ( "Connect!" );
@@ -711,15 +750,21 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
    * \brief Applies the language model (Full translation lattice!). Currently applies on-the-fly the language model using kenlm.
    * \param localfst: lattice to score with the language model.
    */
-
-  inline fst::VectorFst<Arc> *applyLanguageModel ( const fst::Fst<Arc>& localfst ,
-      bool local = false ) {
+  inline fst::VectorFst<Arc> *applyLanguageModel ( const fst::Fst<Arc>& localfst
+                                                   , bool local = false ) {
     if ( local ) {
-      LINFO ( "Composing with local lm for inadmissible pruning" );
+      MakeWeightHifstLocalLm<Arc> mw(rg_);
+      initializeLanguageModelHandlers(locallmkey_, mw, almotfLocal_);
+      if (!almotfLocal_.size()) return NULL;
+      LINFO ( "Composing with local lm for inadmissible pruning (unless on top cell)" );
+      return applyLanguageModel (localfst, locallmkey_, mw, almotfLocal_);
     } else {
+      fst::MakeWeight<Arc> mw;
+      initializeLanguageModelHandlers(lmkey_, mw, almotf_);
+      if (!almotf_.size()) return NULL;
       LINFO ( "Composing with full lm for admissible pruning" );
+      return applyLanguageModel (localfst, lmkey_, mw, almotf_);
     }
-    return applyLanguageModel (localfst, local ? locallmkey_ : lmkey_);
   };
 
   inline fst::VectorFst<Arc> *expand ( const fst::VectorFst<Arc>& localfst,
@@ -781,9 +826,11 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
       fst::RmEpsilon<Arc> ( efst );
       LINFO ( "AT " << cc << "," << x << "," << y << ": NS=" << efst->NumStates() );
       ++piscount_;
+      LINFO("Apply filtering");
       applyFilters ( efst );
       LINFO ( "Apply LM" );
       fst::VectorFst<Arc> * latlm = applyLanguageModel ( *efst , true );
+
       if ( latlm != NULL ) {
         delete efst;
         //\todo Include union with shortest path...
@@ -799,10 +846,11 @@ class HiFSTTask: public ucam::util::TaskInterface<Data> {
           pdtparens_.clear();
         }
         LINFO ( "Delete LM scores" );
-        //Deletes LM scores if using lexstdarc. Note -- will copy through on stdarc!
-        fst::MakeWeight2<Arc> mwcopy;
+        //Deletes LM scores if using lexstdarc or tuplearc
+        //        fst::MakeWeight2<Arc> mwcopy;
+        MakeWeightHifstLocalLm<Arc > mwcopy(rg_);
         fst::Map<Arc> ( latlm,
-                        fst::GenericWeightAutoMapper<Arc, fst::MakeWeight2<Arc> > ( mwcopy ) );
+                        fst::GenericWeightAutoMapper<Arc, MakeWeightHifstLocalLm<Arc> > ( mwcopy ) );
         LINFO ( "AT " << cc << "," << x << "," << y << ": pruned with weight=" << weight
                 << ",NS=" << latlm->NumStates() );
         return latlm;

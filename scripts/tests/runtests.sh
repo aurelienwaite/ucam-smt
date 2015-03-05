@@ -1,5 +1,8 @@
 #!/bin/bash
 
+export CAM_SMT_DIR=../../
+. $CAM_SMT_DIR/Makefile.inc
+
 if [ -z "$TGTBINMK" ]; then
 
     cat <<EOF
@@ -29,11 +32,14 @@ EOF
     exit 1
 fi
 
-export CAM_SMT_DIR=../../
-. $CAM_SMT_DIR/Makefile.inc
+
+
+
+
 
 export LD_LIBRARY_PATH=$CAM_SMT_DIR/bin/:$OPENFST_LIB:$BOOST_LIB:$LD_LIBRARY_PATH
 export PATH=$OPENFST_BIN:$PATH
+if [ ! -z $NPLM_LIB ]; then LD_LIBRARY_PATH+=:$NPLM_LIB; fi
 
 runtests() {
 
@@ -43,19 +49,24 @@ runtests() {
     total=0
     passed=0
     failed=0
+    skip=0
     for mytest in `typeset -F | awk '{print $3}'| grep "^test_" `; do 
 	let total=total+1
 	if [[ `$mytest | tail -1 ` -eq 1 ]]; then 
-	printf "%40s  ========== OK!\n" $mytest
+	printf "OK!   ========== %-50s\n" $mytest
 	let passed=passed+1
-	else 
-	    printf "%40s  ========== FAIL!\n" $mytest
+	elif [[ `$mytest | tail -1 ` -eq 2 ]]; then 
+	    printf "SKIP! ========== %-50s\n" $mytest
+	    let skip=skip+1
+	else
+	    printf "FAIL! ========== %-50s\n" $mytest
 	    let failed=failed+1
 	fi
     done 
     
     echo "============================================================"
-    printf "PASSED: %5d tests (%20s)\n" $passed `basename $0`
-    printf "FAILED: %5d tests (%20s) \n" $failed `basename $0`
-    printf " TOTAL: %5d tests (%20s) \n" $total `basename $0`
+    printf " PASSED: %5d tests (%20s)\n" $passed `basename $0`
+    printf " FAILED: %5d tests (%20s) \n" $failed `basename $0`
+    printf "SKIPPED: %5d tests (%20s) \n" $skip `basename $0`
+    printf "  TOTAL: %5d tests (%20s) \n" $total `basename $0`
 }
