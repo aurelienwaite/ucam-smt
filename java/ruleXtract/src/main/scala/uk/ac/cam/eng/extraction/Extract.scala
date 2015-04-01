@@ -11,9 +11,9 @@ case class ExtractOptions(maxSourcePhrase: Int, maxSourceElements: Int, maxTermi
 
 object Extract {
 
-  def filterNTSpan(options: ExtractOptions, srcSpan : Span ) =
+  def filterNTSpan(options: ExtractOptions, srcSpan: Span) =
     srcSpan.end - srcSpan.start + 1 <= options.maxNonTerminalSpan
-  
+
   def toSymbols(s: String): Vector[Symbol] = {
     s.split(" ").map(x => Terminal.create(x.toInt)).toVector
   }
@@ -59,7 +59,7 @@ object Extract {
         minTargetIndex = math.min(alignment.getS2T(i).head, minTargetIndex)
         maxTargetIndex = math.max(alignment.getS2T(i).last, maxTargetIndex)
       }
-      //For heiro we consider phrases with max length of the sentences. The long phrases are filtered out at the end.
+      //For heiro we consider phrases with max length of the sentence. The long phrases are filtered out at the end.
       val sourceLength = source.length - 1
       for (j <- i to sourceLength) {
         if (alignment.isSourceAligned(j)) {
@@ -113,12 +113,12 @@ object Extract {
     (extendedPrev ++ results).toList
   }
 
-  def createTwoNTSpan(oneNT: OneNTSpan, other: Span): TwoNTSpan =
-    if (other.start < oneNT.startX)
+  def createTwoNTSpan(oneNT: OneNTSpan, other: Span, innerFirstOnSrc: Boolean): TwoNTSpan = 
+    if(innerFirstOnSrc)
       TwoNTSpan(oneNT.start, oneNT.end, other.start, other.end, oneNT.startX, oneNT.endX)
     else
       TwoNTSpan(oneNT.start, oneNT.end, oneNT.startX, oneNT.endX, other.start, other.end)
-
+      
   def filterPassNonTerminalRule(opts: ExtractOptions, toFilter: Span): Boolean = {
     val (terminalLength, sourceElements) = toFilter match {
       case toFilter: OneNTSpan => {
@@ -143,7 +143,7 @@ object Extract {
       case (pSrcSpan: OneNTSpan, pTrgSpan: OneNTSpan) => {
         val inRangeNT = inRange & (cSrcSpan.end < pSrcSpan.startX || cSrcSpan.start > pSrcSpan.endX)
         val hasConsecutiveNT = (cSrcSpan.end + 1 == pSrcSpan.startX || pSrcSpan.endX + 1 == cSrcSpan.start) ||
-            (options.compatibilityMode && (cTrgSpan.end + 1 == pTrgSpan.startX || pTrgSpan.endX + 1 == cTrgSpan.start))
+          (options.compatibilityMode && (cTrgSpan.end + 1 == pTrgSpan.startX || pTrgSpan.endX + 1 == cTrgSpan.start))
         inRangeNT && !hasConsecutiveNT
       }
       case _ => {
@@ -167,8 +167,7 @@ object Extract {
       Tuple2(TwoNTSpan(srcSpan.endX, srcSpan.startX2, srcSpan.endX,
         srcSpan.endX, srcSpan.startX2, srcSpan.startX2), true)
     else if (!options.compatibilityMode && srcSpan.start == srcSpan.startX)
-      Tuple2(TwoNTSpan(srcSpan.endX, srcSpan.end, srcSpan.endX, srcSpan.endX
-          , srcSpan.startX2, srcSpan.endX2), true)
+      Tuple2(TwoNTSpan(srcSpan.endX, srcSpan.end, srcSpan.endX, srcSpan.endX, srcSpan.startX2, srcSpan.endX2), true)
     else if (!options.compatibilityMode && srcSpan.end == srcSpan.endX2)
       Tuple2(TwoNTSpan(srcSpan.start, srcSpan.startX2, srcSpan.startX,
         srcSpan.endX, srcSpan.startX2, srcSpan.startX2), true)
@@ -193,8 +192,9 @@ object Extract {
       add(options, results, src1NT, trg1NT, dedupe, deduper)
       for (j <- i + 1 until constituentPhrases.size; if (constituent((src1NT, trg1NT), constituentPhrases(j), options))) {
         val (srcInner, trgInner) = constituentPhrases(j)
-        val (src2NT, dedupe) = deduperKey(options, createTwoNTSpan(src1NT, srcInner))
-        val trg2NT = createTwoNTSpan(trg1NT, trgInner)
+        val innerFirstOnSrc = srcInner.start < src1NT.startX
+        val (src2NT, dedupe) = deduperKey(options, createTwoNTSpan(src1NT, srcInner, innerFirstOnSrc))
+        val trg2NT = createTwoNTSpan(trg1NT, trgInner, innerFirstOnSrc)
         add(options, results, src2NT, trg2NT, dedupe, deduper)
       }
     }
@@ -226,10 +226,12 @@ object Extract {
         val slicer = (symbols: Vector[Symbol], span: TwoNTSpan) => new RuleString ++=
           symbols.slice(span.start, span.startX) += V ++= symbols.slice(span.endX + 1, span.startX2) += V1 ++=
           symbols.slice(span.endX2 + 1, span.end + 1)
-        val trgString = if (trg.startX < trg.startX2) slicer(target, trg)
-        else new RuleString ++= target.slice(trg.start, trg.startX2) +=
-          V1 ++= target.slice(trg.endX2 + 1, trg.startX) += V ++=
-          target.slice(trg.endX + 1, trg.end + 1)
+        val trgString = if (trg.startX < trg.startX2) 
+          slicer(target, trg)
+        else 
+          new RuleString ++= target.slice(trg.start, trg.startX2) +=
+            V1 ++= target.slice(trg.endX2 + 1, trg.startX) += V ++=
+            target.slice(trg.endX + 1, trg.end + 1)
         (new Rule(slicer(source, src), trgString), phraseAlignment)
       }
       case _ => throw new UnsupportedOperationException("Must use spans of the same type")
@@ -244,7 +246,7 @@ object Extract {
     val deduper = new scala.collection.mutable.HashSet[Span]
     val all = parents ++ other
     val extractor = if (options.compatibilityMode) extractNT(options, children, deduper)_
-    else extractNT(options, all.filter{case (srcSpan,_) => filterNTSpan(options, srcSpan)}, deduper)_
+    else extractNT(options, all.filter { case (srcSpan, _) => filterNTSpan(options, srcSpan) }, deduper)_
     val rules = if (options.compatibilityMode) extractor(parents) else extractor(all)
     val phrases = all
       .filter { case (srcSpan, _) => srcSpan.end - srcSpan.start + 1 <= options.maxSourcePhrase }

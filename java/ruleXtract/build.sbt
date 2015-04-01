@@ -23,7 +23,8 @@ resolvers += Resolver.sonatypeRepo("snapshots")
 // depends on hadoop, hbase and junit
 libraryDependencies ++= Seq(
 		    "com.beust" % "jcommander" % "1.35",
-		    "org.apache.hadoop" % "hadoop-core" % "1.2.1" % "provided",
+		    "org.apache.hadoop" % "hadoop-common" % "2.6.0" % "provided",
+		    "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "2.6.0" % "provided",
 		    "org.apache.hbase" % "hbase" % "0.92.0" intransitive(),
 		    "com.google.guava" % "guava" % "r09",
 		    "junit" % "junit" % "4.11" % "test",

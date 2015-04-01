@@ -63,6 +63,7 @@ class PipelineTest extends FunSuite with BeforeAndAfterAll {
 
   test("The rule extraction job") {
     val conf = new Configuration
+    conf.set("mapreduce.framework.name", "foobar");
     conf.setInt(CLI.RuleParameters.MAX_SOURCE_PHRASE, 9)
     conf.setInt(CLI.RuleParameters.MAX_SOURCE_ELEMENTS, 5)
     conf.setInt(CLI.RuleParameters.MAX_TERMINAL_LENGTH, 5)

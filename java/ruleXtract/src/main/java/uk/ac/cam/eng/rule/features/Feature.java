@@ -2,6 +2,12 @@ package uk.ac.cam.eng.rule.features;
 
 public enum Feature {
 
+	/*
+	 * The order of the enum dictates the index of the feature in the HFile. To maintain backwards 
+	 * compatibility with old HFiles only add features to the end of this enum. Do not insert 
+	 * new features in between existing features. 
+	 */
+	
 	SOURCE2TARGET_PROBABILITY(Scope.GLOBAL, ComputeLocation.MAP_REDUCE),
 	TARGET2SOURCE_PROBABILITY(Scope.GLOBAL, ComputeLocation.MAP_REDUCE),
 	PROVENANCE_SOURCE2TARGET_PROBABILITY(Scope.PROVENANCE, ComputeLocation.MAP_REDUCE),
