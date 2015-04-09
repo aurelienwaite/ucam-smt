@@ -23,9 +23,10 @@ resolvers += Resolver.sonatypeRepo("snapshots")
 // depends on hadoop, hbase and junit
 libraryDependencies ++= Seq(
 		    "com.beust" % "jcommander" % "1.35",
-		    "org.apache.hadoop" % "hadoop-common" % "2.6.0" % "provided",
+		    "org.apache.hadoop" % "hadoop-common" % "2.6.0" intransitive(),
 		    "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "2.6.0" % "provided",
 		    "org.apache.hbase" % "hbase" % "0.92.0" intransitive(),
+		    "commons-collections" % "commons-collections" % "3.2.1",
 		    "com.google.guava" % "guava" % "r09",
 		    "junit" % "junit" % "4.11" % "test",
 		    "com.novocode" % "junit-interface" % "0.10" % "test",
@@ -35,15 +36,9 @@ libraryDependencies ++= Seq(
 
 scalaVersion := "2.11.4"
 
-// output jar name is simply ruleXtract.jar
-artifactName in (Compile, packageBin) := { (sv: ScalaVersion, module: ModuleID, artifact: Artifact) =>
-	     artifact.name + "." + artifact.extension
-}
-
 // output jar is here: target/ruleXtract.jar
-artifactPath in (Compile, packageBin) ~= { defaultPath =>
-	     file("target") / defaultPath.getName
-}
+assemblyOutputPath in assembly := file("target/ruleXtract.jar") 
+
 
 // we want a jar without a main class so we can run it as "hadoop jar class args"
 mainClass in (Compile, packageBin) := None
