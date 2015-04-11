@@ -180,7 +180,7 @@ public class TTableServer implements Closeable {
 		}
 	};
 
-	private void startServer() {
+	public void startServer() {
 		Thread serverThread = new Thread(server);
 		serverThread.setDaemon(true);
 		serverThread.start();
@@ -220,7 +220,7 @@ public class TTableServer implements Closeable {
 		}
 	}
 
-	private void setup(CLI.TTableServerParameters params) throws IOException,
+	public void setup(CLI.TTableServerParameters params) throws IOException,
 			InterruptedException {
 		boolean source2Target;
 		if (params.ttableDirection.equals("s2t")) {
