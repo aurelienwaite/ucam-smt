@@ -24,15 +24,26 @@ resolvers += Resolver.sonatypeRepo("snapshots")
 libraryDependencies ++= Seq(
 		    "com.beust" % "jcommander" % "1.35",
 		    "org.apache.hadoop" % "hadoop-common" % "2.6.0" intransitive(),
-		    "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "2.6.0" % "provided",
-		    "org.apache.hbase" % "hbase" % "0.92.0" intransitive(),
-		    "commons-collections" % "commons-collections" % "3.2.1",
-		    "com.google.guava" % "guava" % "r09",
+		    "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "2.6.0"  intransitive(),
+		    "org.apache.hadoop" % "hadoop-annotations" % "2.6.0" intransitive(), 
+		    "org.apache.hbase" % "hbase-server" % "0.96.2-hadoop2" intransitive(), 
+		    "org.apache.hbase" % "hbase-common" % "0.96.2-hadoop2"  intransitive(), 
+		    "org.apache.hbase" % "hbase-client" % "0.96.2-hadoop2" intransitive(),
+		    "commons-configuration" % "commons-configuration" % "1.6" exclude("commons-beanutils", "commons-beanutils-core"),
+		    "com.google.guava" % "guava" % "11.0.2",
+		    "org.slf4j" % "slf4j-api" % "1.7.5",
 		    "junit" % "junit" % "4.11" % "test",
 		    "com.novocode" % "junit-interface" % "0.10" % "test",
-		    "com.jsuereth" % "scala-arm_2.11" % "1.4",
+		    "com.jsuereth" % "scala-arm_2.11" % "1.4" % "test",
 		    "org.scalatest" % "scalatest_2.11" % "2.2.1" % "test"
 		    )
+
+assemblyExcludedJars in assembly := { 
+  val cp = (fullClasspath in assembly).value
+  cp filter {_.data.getName == "commons-beanutils-1.7.0.jar"}
+}
+
+run in Compile <<= Defaults.runTask(fullClasspath in Compile, mainClass in (Compile, run), runner in (Compile, run))
 
 scalaVersion := "2.11.4"
 

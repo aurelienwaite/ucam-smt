@@ -156,7 +156,7 @@ public class RuleRetriever {
 					FileSystem.getLocal(conf), new Path(file.getPath()),
 					cacheConf);
 			bfs[i] = BloomFilterFactory.createFromMeta(
-					hfReader.getBloomFilterMetadata(), hfReader);
+					hfReader.getGeneralBloomFilterMetadata(), hfReader);
 			readers[i] = new HFileRuleReader(hfReader);
 		}
 	}

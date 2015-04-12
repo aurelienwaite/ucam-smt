@@ -24,7 +24,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.regionserver.StoreFile.BloomType;
+import org.apache.hadoop.hbase.regionserver.BloomType;
 import org.apache.hadoop.hbase.util.BloomFilterFactory;
 import org.apache.hadoop.hbase.util.BloomFilterWriter;
 import org.apache.hadoop.io.Writable;
@@ -51,10 +51,10 @@ public class SimpleHFileOutputFormat extends
 		final Configuration conf = job.getConfiguration();
 		Path file = getDefaultWorkFile(job, ".hfile");
 		FileSystem fs = file.getFileSystem(conf);
-		HFile.WriterFactory writerFactory = HFile.getWriterFactory(conf);
-		final HFile.Writer writer = writerFactory.createWriter(fs, file,
-				64 * 1024, "gz", null);
 		final CacheConfig cacheConfig = new CacheConfig(conf);
+		HFile.WriterFactory writerFactory = HFile.getWriterFactory(conf, cacheConfig).withPath(fs, file)
+				.withBlockSize(64 * 1024).withCompression("gz");
+		final HFile.Writer writer = writerFactory.create();
 		return new RecordWriter<RuleString, TargetFeatureList>() {
 
 			private ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
@@ -62,7 +62,7 @@ public class SimpleHFileOutputFormat extends
 			private DataOutputStream out = new DataOutputStream(bytesOut);
 
 			BloomFilterWriter bloomFilterWriter = BloomFilterFactory
-					.createBloomAtWrite(conf, cacheConfig, BloomType.ROW, -1,
+					.createGeneralBloomAtWrite(conf, cacheConfig, BloomType.ROW, -1,
 							writer);
 
 			private byte[] createBytes(Writable obj) throws IOException {
@@ -82,7 +82,7 @@ public class SimpleHFileOutputFormat extends
 
 			@Override
 			public void close(TaskAttemptContext context) throws IOException {
-				writer.addBloomFilter(bloomFilterWriter);
+				writer.addGeneralBloomFilter(bloomFilterWriter);
 				writer.close();
 			}
 		};
