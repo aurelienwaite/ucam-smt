@@ -1,8 +1,9 @@
 #!/bin/bash
 DIR=`dirname $0`
+MEM=${RETRIEVE_MEM:-70G}
 SCALA=${SCALA_BIN:-scala}
 echo "Using ruleXtract jar: $DIR/../target/ruleXtract.jar"
-exec $SCALA -nc -J-Xms70G -J-Xmx70G -classpath "$DIR/../target/ruleXtract.jar" $0 $@
+exec $SCALA -nc -J-Xms"$RETRIEVE_MEM" -J-Xmx"$RETRIEVE_MEM" -classpath "$DIR/../target/ruleXtract.jar" $0 $@
 !#
 
 import java.io.File
@@ -19,7 +20,7 @@ def startTTableServer(params : CLI.TTableServerParameters) = {
 	server.startServer
 }
 
- object Args {
+object Args {
     @Parameter( names = Array("--s2t_language_pair"), description = "Language pair for s2t", required = true)
     var s2tlp: String = null
 
