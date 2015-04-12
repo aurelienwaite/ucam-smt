@@ -171,7 +171,7 @@ public final class CLI {
 		@Parameter(names = { "--test_file" }, description = "File containing the sentences to be translated")
 		public String testFile;
 
-		@Parameter(names = { "--rules" }, description = "Output file containing filtered rules")
+		@Parameter(names = { "--rules" }, description = "Output file containing filtered rules", required=true)
 		public String rules;
 		
 		@Parameter(names = { "--vocab" }, description = "Output file containing vocab to be used for language model filtering")
