@@ -39,3 +39,5 @@ params.ttableLanguagePair = Args.t2slp
 startTTableServer(params)
 
 RuleRetriever.main(args)
+// We need an explicit exit because of the threadpools in the ttable servers
+System.exit(0)

@@ -21,11 +21,16 @@ libraryDependencies ++= Seq(
 		    "org.apache.hadoop" % "hadoop-common" % "2.6.0" intransitive(),
 		    "org.apache.hadoop" % "hadoop-mapreduce-client-core" % "2.6.0"  intransitive(),
 		    "org.apache.hadoop" % "hadoop-annotations" % "2.6.0" intransitive(), 
+		    "org.apache.hadoop" % "hadoop-auth" % "2.6.0" intransitive(),
 		    "org.apache.hbase" % "hbase-server" % "0.96.2-hadoop2" intransitive(), 
 		    "org.apache.hbase" % "hbase-common" % "0.96.2-hadoop2"  intransitive(), 
 		    "org.apache.hbase" % "hbase-client" % "0.96.2-hadoop2" intransitive(),
+    		    "org.apache.hbase" % "hbase-protocol" % "0.96.2-hadoop2",
+		    "org.cloudera.htrace" % "htrace-core" % "2.04" intransitive(),
 		    "commons-configuration" % "commons-configuration" % "1.6" exclude("commons-beanutils", "commons-beanutils-core"),
+		    "commons-io" % "commons-io" % "2.4",
 		    "com.google.guava" % "guava" % "11.0.2",
+		    "log4j" % "log4j" % "1.2.16" intransitive(),
 		    "org.slf4j" % "slf4j-api" % "1.7.5",
 		    "junit" % "junit" % "4.11" % "test",
 		    "com.novocode" % "junit-interface" % "0.10" % "test",
@@ -48,6 +53,3 @@ assemblyOutputPath in assembly := file("target/ruleXtract.jar")
 
 // we want a jar without a main class so we can run it as "hadoop jar class args"
 mainClass in (Compile, packageBin) := None
-// this works too, see http://stackoverflow.com/questions/18325181/suppress-main-class-in-sbt-assembly
-//packageOptions in (Compile, packageBin) ~= { os =>
-//	       os filterNot {_.isInstanceOf[Package.MainClass]} }
