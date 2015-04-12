@@ -1,8 +1,5 @@
 name := "ruleXtract"
 
-// workaround for artifact name in camel case (https://groups.google.com/forum/#!msg/liftweb/n1nstGkfkKQ/0gBOV-yrBjoJ)
-moduleName := name.value
-
 version := "1.0"
 
 organization := "University of Cambridge"
@@ -17,8 +14,6 @@ EclipseKeys.withSource := true
 //target := file("bin")
 
 test in assembly := {}
-
-resolvers += Resolver.sonatypeRepo("snapshots")
 
 // depends on hadoop, hbase and junit
 libraryDependencies ++= Seq(
