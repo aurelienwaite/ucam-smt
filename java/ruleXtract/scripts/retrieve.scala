@@ -3,7 +3,7 @@ DIR=`dirname $0`
 MEM=${RETRIEVE_MEM:-70G}
 SCALA=${SCALA_BIN:-scala}
 echo "Using ruleXtract jar: $DIR/../target/ruleXtract.jar"
-exec $SCALA -nc -J-Xms"$RETRIEVE_MEM" -J-Xmx"$RETRIEVE_MEM" -classpath "$DIR/../target/ruleXtract.jar" $0 $@
+exec $SCALA -nc -J-Xms"$MEM" -J-Xmx"$MEM" -classpath "$DIR/../target/ruleXtract.jar" $0 $@
 !#
 
 import java.io.File
