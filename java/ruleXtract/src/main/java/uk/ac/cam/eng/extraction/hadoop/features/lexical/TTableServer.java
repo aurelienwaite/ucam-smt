@@ -43,8 +43,6 @@ import org.apache.hadoop.util.StringUtils;
 import uk.ac.cam.eng.extraction.hadoop.util.Util;
 import uk.ac.cam.eng.util.CLI;
 
-import com.beust.jcommander.ParameterException;
-
 /**
  * 
  * @author Aurelien Waite
@@ -266,14 +264,11 @@ public class TTableServer implements Closeable {
 		threadPool.shutdown();
 	}
 
-	public static int main(String[] args) throws IllegalArgumentException,
+	public static void main(String[] args) throws IllegalArgumentException,
 			IllegalAccessException, IOException, InterruptedException {
 		CLI.TTableServerParameters params = new CLI.TTableServerParameters();
-		try {
-			Util.parseCommandLine(args, params);
-		} catch (ParameterException e) {
-			return 1;
-		}
+		Util.parseCommandLine(args, params);
+
 		try (TTableServer server = new TTableServer()) {
 			server.setup(params);
 			server.startServer();
@@ -281,7 +276,6 @@ public class TTableServer implements Closeable {
 					+ server.serverSocket.getLocalPort());
 			Thread.sleep(24 * 60 * 60 * 1000); // Sleep for 24 hours
 		}
-		return 0;
 	}
 
 }
